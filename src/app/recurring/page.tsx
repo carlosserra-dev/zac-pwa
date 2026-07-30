@@ -27,7 +27,7 @@ export default async function RecurringPage({
       supabase
         .from("recurring_expenses")
         .select(
-          "id, user_id, category_id, amount, note, day_of_month, active, created_at, categories ( id, name, icon ), profiles ( id, display_name )"
+          "id, user_id, category_id, amount, note, day_of_month, active, split_equally, created_at, categories ( id, name, icon ), profiles ( id, display_name )"
         )
         .order("day_of_month", { ascending: true }),
       supabase
@@ -92,7 +92,11 @@ export default async function RecurringPage({
                 </p>
                 <p className="break-words text-xs text-slate-500 dark:text-slate-400">
                   R$ {Number(r.amount).toFixed(2)}
-                  {r.profiles?.display_name ? ` · ${r.profiles.display_name}` : ""}
+                  {r.split_equally
+                    ? " · 🤝 Dividido"
+                    : r.profiles?.display_name
+                      ? ` · ${r.profiles.display_name}`
+                      : ""}
                   {r.note ? ` · ${r.note}` : ""}
                 </p>
               </div>
@@ -143,19 +147,37 @@ export default async function RecurringPage({
               ))}
             </select>
 
+            {typedProfiles.length > 1 && (
+              <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 transition active:scale-[0.99] dark:border-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  name="split_equally"
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600"
+                />
+                🤝 Dividir 50/50 entre vocês dois
+              </label>
+            )}
+
             {typedProfiles.length > 0 && (
-              <select
-                name="spent_by"
-                required
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                <option value="">Quem paga?</option>
-                {typedProfiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.display_name}
-                  </option>
-                ))}
-              </select>
+              <div>
+                <select
+                  name="spent_by"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="">Quem paga?</option>
+                  {typedProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.display_name}
+                    </option>
+                  ))}
+                </select>
+                {typedProfiles.length > 1 && (
+                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                    Ignorado se &ldquo;dividir 50/50&rdquo; estiver marcado
+                    acima.
+                  </p>
+                )}
+              </div>
             )}
 
             <div className="grid grid-cols-2 gap-2">

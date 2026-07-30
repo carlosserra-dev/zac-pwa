@@ -33,6 +33,7 @@ export type RecurringExpense = {
   note: string | null;
   day_of_month: number;
   active: boolean;
+  split_equally: boolean;
   created_at: string;
 };
 

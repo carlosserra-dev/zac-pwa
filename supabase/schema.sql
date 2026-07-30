@@ -30,6 +30,7 @@ create table if not exists public.recurring_expenses (
   note text,
   day_of_month integer not null default 1 check (day_of_month between 1 and 28),
   active boolean not null default true,
+  split_equally boolean not null default false,
   created_at timestamptz not null default now()
 );
 

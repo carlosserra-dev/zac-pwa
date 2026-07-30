@@ -180,8 +180,9 @@ export async function addRecurringExpense(formData: FormData) {
   const note = String(formData.get("note") || "").trim() || null;
   const dayOfMonth = Number.parseInt(String(formData.get("day_of_month") || "1"), 10);
   const spentBy = String(formData.get("spent_by") || "");
+  const splitEqually = formData.get("split_equally") === "on";
 
-  if (!categoryId || !spentBy || !Number.isFinite(amount) || amount <= 0) {
+  if (!categoryId || (!splitEqually && !spentBy) || !Number.isFinite(amount) || amount <= 0) {
     redirect("/recurring?error=1");
   }
 
@@ -196,6 +197,7 @@ export async function addRecurringExpense(formData: FormData) {
     amount,
     note,
     day_of_month: Number.isFinite(dayOfMonth) ? Math.min(28, Math.max(1, dayOfMonth)) : 1,
+    split_equally: splitEqually,
   });
 
   if (error) redirect("/recurring?error=1");
@@ -223,7 +225,9 @@ export async function ensureRecurringForCurrentMonth() {
 
   const { data: recurring } = await supabase
     .from("recurring_expenses")
-    .select("id, user_id, category_id, amount, note, day_of_month, active")
+    .select(
+      "id, user_id, category_id, amount, note, day_of_month, active, split_equally"
+    )
     .eq("active", true);
 
   if (!recurring || recurring.length === 0) return;
@@ -242,21 +246,60 @@ export async function ensureRecurringForCurrentMonth() {
     .not("recurring_expense_id", "is", null);
 
   const already = new Set((existing || []).map((t) => t.recurring_expense_id));
+  const pending = recurring.filter((r) => !already.has(r.id));
 
-  const toInsert = recurring
-    .filter((r) => !already.has(r.id))
-    .map((r) => {
-      const day = Math.min(r.day_of_month, 28);
-      const date = new Date(year, month, day).toISOString().slice(0, 10);
-      return {
+  if (pending.length === 0) return;
+
+  const needsProfiles = pending.some((r) => r.split_equally);
+  const profileIds: string[] = [];
+  if (needsProfiles) {
+    const { data: profiles } = await supabase.from("profiles").select("id");
+    profileIds.push(...(profiles || []).map((p) => p.id));
+  }
+
+  const toInsert: {
+    category_id: string;
+    user_id: string;
+    amount: number;
+    note: string;
+    transaction_date: string;
+    recurring_expense_id: string;
+  }[] = [];
+
+  for (const r of pending) {
+    const day = Math.min(r.day_of_month, 28);
+    const date = new Date(year, month, day).toISOString().slice(0, 10);
+    const baseNote = r.note ? `${r.note} (recorrente)` : "Recorrente";
+
+    if (r.split_equally && profileIds.length > 1) {
+      // Divide em partes iguais (centavo extra fica com a primeira pessoa)
+      const totalCents = Math.round(r.amount * 100);
+      const share = Math.floor(totalCents / profileIds.length);
+      let remainder = totalCents - share * profileIds.length;
+
+      for (const profileId of profileIds) {
+        const cents = share + (remainder > 0 ? 1 : 0);
+        if (remainder > 0) remainder -= 1;
+        toInsert.push({
+          category_id: r.category_id,
+          user_id: profileId,
+          amount: cents / 100,
+          note: `${baseNote} - dividido`,
+          transaction_date: date,
+          recurring_expense_id: r.id,
+        });
+      }
+    } else {
+      toInsert.push({
         category_id: r.category_id,
         user_id: r.user_id,
         amount: r.amount,
-        note: r.note ? `${r.note} (recorrente)` : "Recorrente",
+        note: baseNote,
         transaction_date: date,
         recurring_expense_id: r.id,
-      };
-    });
+      });
+    }
+  }
 
   if (toInsert.length > 0) {
     await supabase.from("transactions").insert(toInsert);
