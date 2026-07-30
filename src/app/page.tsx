@@ -40,11 +40,11 @@ export default async function DashboardPage({
             <Link
               key={cat.id}
               href={`/add/${cat.id}`}
-              className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-5 text-center shadow-sm transition active:scale-95"
+              className="flex min-w-0 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-5 text-center shadow-sm transition active:scale-95"
               style={{ boxShadow: `inset 0 -3px 0 0 ${cat.color}` }}
             >
               <span className="text-2xl">{cat.icon}</span>
-              <span className="text-xs font-medium text-slate-700">
+              <span className="w-full break-words text-xs font-medium leading-tight text-slate-700">
                 {cat.name}
               </span>
             </Link>

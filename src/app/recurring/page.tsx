@@ -82,12 +82,12 @@ export default async function RecurringPage({
               key={r.id}
               className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
             >
-              <span className="text-xl">{r.categories?.icon ?? "📦"}</span>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-slate-800">
+              <span className="shrink-0 text-xl">{r.categories?.icon ?? "📦"}</span>
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-sm font-medium text-slate-800">
                   {r.categories?.name ?? "Categoria"} · dia {r.day_of_month}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="break-words text-xs text-slate-500">
                   R$ {Number(r.amount).toFixed(2)}
                   {r.profiles?.display_name ? ` · ${r.profiles.display_name}` : ""}
                   {r.note ? ` · ${r.note}` : ""}
@@ -155,26 +155,35 @@ export default async function RecurringPage({
               </select>
             )}
 
-            <div className="flex gap-2">
-              <input
-                type="number"
-                name="amount"
-                step="0.01"
-                min="0.01"
-                required
-                placeholder="Valor (R$)"
-                className="flex-1 rounded-lg border border-slate-300 px-3 py-2"
-              />
-              <input
-                type="number"
-                name="day_of_month"
-                min="1"
-                max="28"
-                defaultValue={5}
-                required
-                title="Dia do mês em que lança"
-                className="w-24 rounded-lg border border-slate-300 px-3 py-2"
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="min-w-0">
+                <label className="mb-1 block text-xs text-slate-500">
+                  Valor (R$)
+                </label>
+                <input
+                  type="number"
+                  name="amount"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  placeholder="0,00"
+                  className="w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="mb-1 block text-xs text-slate-500">
+                  Dia do lançamento
+                </label>
+                <input
+                  type="number"
+                  name="day_of_month"
+                  min="1"
+                  max="28"
+                  defaultValue={5}
+                  required
+                  className="w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </div>
             </div>
             <input
               type="text"

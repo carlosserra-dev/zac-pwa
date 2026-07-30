@@ -171,11 +171,13 @@ export default async function OverviewPage() {
                 key={c.name}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-3"
               >
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-slate-700">
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="min-w-0 break-words font-medium text-slate-700">
                     {c.icon} {c.name}
                   </span>
-                  <span className="text-slate-500">R$ {c.total.toFixed(2)}</span>
+                  <span className="shrink-0 text-slate-500">
+                    R$ {c.total.toFixed(2)}
+                  </span>
                 </div>
                 <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
                   <div
@@ -197,18 +199,18 @@ export default async function OverviewPage() {
               key={t.id}
               className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
             >
-              <span className="text-lg">{t.categories?.icon ?? "📦"}</span>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-slate-800">
+              <span className="shrink-0 text-lg">{t.categories?.icon ?? "📦"}</span>
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-sm font-medium text-slate-800">
                   {t.categories?.name ?? "Categoria"}
                   {t.note ? ` · ${t.note}` : ""}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="break-words text-xs text-slate-500">
                   {new Date(t.transaction_date).toLocaleDateString("pt-BR")}
                   {t.profiles?.display_name ? ` · ${t.profiles.display_name}` : ""}
                 </p>
               </div>
-              <span className="text-sm font-semibold text-slate-800">
+              <span className="shrink-0 text-sm font-semibold text-slate-800">
                 R$ {Number(t.amount).toFixed(2)}
               </span>
               <form action={deleteWithId.bind(null, t.id)}>

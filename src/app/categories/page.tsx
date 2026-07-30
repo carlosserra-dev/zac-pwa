@@ -81,11 +81,11 @@ export default async function CategoriesPage({
               className="group rounded-xl border border-slate-200 bg-white"
             >
               <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3">
-                <span className="text-xl">{cat.icon}</span>
-                <span className="flex-1 text-sm font-medium text-slate-800">
+                <span className="shrink-0 text-xl">{cat.icon}</span>
+                <span className="min-w-0 flex-1 break-words text-sm font-medium text-slate-800">
                   {cat.name}
                 </span>
-                <span className="text-slate-400 group-open:rotate-180 transition">
+                <span className="shrink-0 text-slate-400 group-open:rotate-180 transition">
                   ⌄
                 </span>
               </summary>
