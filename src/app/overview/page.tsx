@@ -120,12 +120,17 @@ export default async function OverviewPage() {
   return (
     <>
       <main className="mx-auto w-full max-w-md flex-1 px-5 pb-6 pt-8">
-        <Link href="/" className="mb-4 inline-block text-sm text-slate-500">
+        <Link
+          href="/"
+          className="mb-4 inline-block text-sm text-slate-500 dark:text-slate-400"
+        >
           ← Voltar
         </Link>
-        <h1 className="text-lg font-semibold text-slate-900">Resumo do mês</h1>
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Resumo do mês
+        </h1>
 
-        <div className="mt-4 rounded-2xl bg-slate-900 px-5 py-6 text-white">
+        <div className="mt-4 rounded-2xl bg-slate-900 px-5 py-6 text-white dark:bg-slate-800">
           <p className="text-xs text-slate-300">Total gasto este mês</p>
           <p className="mt-1 text-3xl font-semibold">
             R$ {totalMonth.toFixed(2)}
@@ -137,10 +142,12 @@ export default async function OverviewPage() {
             {byPerson.map((p) => (
               <div
                 key={p.name}
-                className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3"
+                className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900"
               >
-                <p className="text-xs text-slate-500">{p.name}</p>
-                <p className="text-base font-semibold text-slate-800">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {p.name}
+                </p>
+                <p className="text-base font-semibold text-slate-800 dark:text-slate-200">
                   R$ {p.total.toFixed(2)}
                 </p>
               </div>
@@ -148,19 +155,19 @@ export default async function OverviewPage() {
           </div>
         )}
 
-        <h2 className="mt-8 mb-2 text-sm font-semibold text-slate-700">
+        <h2 className="mt-8 mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
           Comparativo dos últimos 6 meses
         </h2>
-        <div className="rounded-2xl border border-slate-200 bg-white p-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
           <MonthsBarChart data={months} />
         </div>
 
-        <h2 className="mt-8 mb-2 text-sm font-semibold text-slate-700">
+        <h2 className="mt-8 mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
           Por categoria
         </h2>
         <div className="space-y-2">
           {byCategory.length === 0 && (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-400 dark:text-slate-500">
               Nenhum gasto lançado neste mês ainda.
             </p>
           )}
@@ -169,17 +176,17 @@ export default async function OverviewPage() {
             return (
               <div
                 key={c.name}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-3"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
               >
                 <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="min-w-0 break-words font-medium text-slate-700">
+                  <span className="min-w-0 break-words font-medium text-slate-700 dark:text-slate-300">
                     {c.icon} {c.name}
                   </span>
-                  <span className="shrink-0 text-slate-500">
+                  <span className="shrink-0 text-slate-500 dark:text-slate-400">
                     R$ {c.total.toFixed(2)}
                   </span>
                 </div>
-                <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
+                <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800">
                   <div
                     className="h-1.5 rounded-full"
                     style={{ width: `${pct}%`, backgroundColor: c.color }}
@@ -190,33 +197,33 @@ export default async function OverviewPage() {
           })}
         </div>
 
-        <h2 className="mt-8 mb-2 text-sm font-semibold text-slate-700">
+        <h2 className="mt-8 mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
           Lançamentos do mês
         </h2>
         <div className="space-y-2 pb-4">
           {currentMonthTx.map((t) => (
             <div
               key={t.id}
-              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
             >
               <span className="shrink-0 text-lg">{t.categories?.icon ?? "📦"}</span>
               <div className="min-w-0 flex-1">
-                <p className="break-words text-sm font-medium text-slate-800">
+                <p className="break-words text-sm font-medium text-slate-800 dark:text-slate-200">
                   {t.categories?.name ?? "Categoria"}
                   {t.note ? ` · ${t.note}` : ""}
                 </p>
-                <p className="break-words text-xs text-slate-500">
+                <p className="break-words text-xs text-slate-500 dark:text-slate-400">
                   {new Date(t.transaction_date).toLocaleDateString("pt-BR")}
                   {t.profiles?.display_name ? ` · ${t.profiles.display_name}` : ""}
                 </p>
               </div>
-              <span className="shrink-0 text-sm font-semibold text-slate-800">
+              <span className="shrink-0 text-sm font-semibold text-slate-800 dark:text-slate-200">
                 R$ {Number(t.amount).toFixed(2)}
               </span>
               <form action={deleteWithId.bind(null, t.id)}>
                 <button
                   type="submit"
-                  className="ml-1 rounded-full bg-red-50 px-2 py-1 text-xs text-red-600"
+                  className="ml-1 shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs text-red-600 transition active:scale-90 dark:bg-red-500/10 dark:text-red-400"
                 >
                   ✕
                 </button>

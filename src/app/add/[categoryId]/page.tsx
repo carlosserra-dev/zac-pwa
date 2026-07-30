@@ -35,7 +35,10 @@ export default async function AddExpensePage({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-8 pt-6">
-      <Link href="/" className="mb-4 text-sm text-slate-500">
+      <Link
+        href="/"
+        className="mb-4 text-sm text-slate-500 dark:text-slate-400"
+      >
         ← Voltar
       </Link>
 
@@ -47,8 +50,10 @@ export default async function AddExpensePage({
           {typedCategory.icon}
         </span>
         <div>
-          <p className="text-xs text-slate-500">Categoria</p>
-          <h1 className="text-lg font-semibold text-slate-900">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Categoria
+          </p>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             {typedCategory.name}
           </h1>
         </div>
@@ -58,7 +63,7 @@ export default async function AddExpensePage({
         <input type="hidden" name="category_id" value={typedCategory.id} />
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
             Valor (R$)
           </label>
           <input
@@ -70,20 +75,20 @@ export default async function AddExpensePage({
             required
             autoFocus
             placeholder="0,00"
-            className="w-full rounded-xl border border-slate-300 px-4 py-4 text-2xl font-semibold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-2xl font-semibold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-indigo-900"
           />
         </div>
 
         {typedProfiles.length > 0 && (
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
               Quem gastou?
             </label>
             <div className="flex gap-2">
               {typedProfiles.map((p) => (
                 <label
                   key={p.id}
-                  className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-slate-300 px-3 py-3 text-sm font-medium text-slate-600 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700"
+                  className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-slate-300 px-3 py-3 text-sm font-medium text-slate-600 transition active:scale-95 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700 dark:border-slate-700 dark:text-slate-400 dark:has-[:checked]:border-indigo-400 dark:has-[:checked]:bg-indigo-500/10 dark:has-[:checked]:text-indigo-300"
                 >
                   <input
                     type="radio"
@@ -100,26 +105,26 @@ export default async function AddExpensePage({
         )}
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
             Observação (opcional)
           </label>
           <textarea
             name="note"
             rows={3}
             placeholder="Ex: compras da semana"
-            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-indigo-900"
           />
         </div>
 
         {error && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
             Preencha um valor válido antes de salvar.
           </p>
         )}
 
         <button
           type="submit"
-          className="mt-auto w-full rounded-xl bg-indigo-600 py-4 font-medium text-white transition hover:bg-indigo-700 active:bg-indigo-800"
+          className="mt-auto w-full rounded-xl bg-indigo-600 py-4 font-medium text-white transition active:scale-[0.98] hover:bg-indigo-700 active:bg-indigo-800"
         >
           Salvar gasto
         </button>

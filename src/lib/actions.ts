@@ -26,6 +26,52 @@ export async function signOut() {
   redirect("/login");
 }
 
+// ---------- Perfil / conta ----------
+
+export async function updateDisplayName(formData: FormData) {
+  const displayName = String(formData.get("display_name") || "").trim();
+  if (!displayName) redirect("/settings?error=name");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ display_name: displayName })
+    .eq("id", user.id);
+
+  if (error) redirect("/settings?error=name");
+
+  revalidatePath("/settings");
+  revalidatePath("/add");
+  revalidatePath("/overview");
+  revalidatePath("/recurring");
+  redirect("/settings?saved=name");
+}
+
+export async function updatePassword(formData: FormData) {
+  const password = String(formData.get("password") || "");
+  const confirmPassword = String(formData.get("confirm_password") || "");
+
+  if (!password || password.length < 6) {
+    redirect("/settings?error=password-short");
+  }
+  if (password !== confirmPassword) {
+    redirect("/settings?error=password-match");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) redirect("/settings?error=password");
+
+  redirect("/settings?saved=password");
+}
+
 // ---------- Lançamentos ----------
 
 export async function addTransaction(formData: FormData) {

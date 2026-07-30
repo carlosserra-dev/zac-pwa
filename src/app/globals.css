@@ -1,8 +1,33 @@
 @import "tailwindcss";
 
+/* Ativa o modo escuro via classe .dark na tag <html>, em vez de depender
+   só da preferência do sistema. Controlado pelo ThemeScript + ThemeToggle. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
+
+  --chart-grid: #e2e8f0;
+  --chart-axis: #64748b;
+  --chart-bar: #4f46e5;
+  --chart-bar-muted: #c7d2fe;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-text: #0f172a;
+  --chart-cursor: #f1f5f9;
+}
+
+.dark {
+  --background: #0b1220;
+  --foreground: #e2e8f0;
+
+  --chart-grid: #1e293b;
+  --chart-axis: #94a3b8;
+  --chart-bar: #818cf8;
+  --chart-bar-muted: #312e81;
+  --chart-tooltip-bg: #1e293b;
+  --chart-tooltip-text: #e2e8f0;
+  --chart-cursor: #1e293b;
 }
 
 @theme inline {
