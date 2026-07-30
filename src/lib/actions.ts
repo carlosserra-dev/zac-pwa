@@ -82,7 +82,10 @@ export async function addCategory(formData: FormData) {
     .from("categories")
     .insert({ name, icon, color, sort_order: nextOrder });
 
-  if (error) redirect("/categories?error=1");
+  if (error) {
+    console.error("addCategory insert error:", error);
+    redirect(`/categories?error=${encodeURIComponent(error.message)}`);
+  }
 
   revalidatePath("/categories");
   revalidatePath("/");

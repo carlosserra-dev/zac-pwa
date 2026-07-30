@@ -68,6 +68,11 @@ export default async function CategoriesPage({
             Preencha um nome válido.
           </p>
         )}
+        {error && error !== "1" && error !== "used" && (
+          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            Erro do banco: {error}
+          </p>
+        )}
 
         <div className="mt-6 space-y-2">
           {(categories as Category[] | null)?.map((cat) => (
