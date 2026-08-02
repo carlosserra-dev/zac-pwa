@@ -22,20 +22,27 @@ export default async function RecurringPage({
 
   const supabase = await createClient();
 
-  const [{ data: recurring }, { data: categories }, { data: profiles }] =
-    await Promise.all([
-      supabase
-        .from("recurring_expenses")
-        .select(
-          "id, user_id, category_id, amount, note, day_of_month, active, split_equally, created_at, categories ( id, name, icon ), profiles ( id, display_name )"
-        )
-        .order("day_of_month", { ascending: true }),
-      supabase
-        .from("categories")
-        .select("id, name, icon, color, sort_order, created_at")
-        .order("sort_order", { ascending: true }),
-      supabase.from("profiles").select("id, display_name, color, created_at"),
-    ]);
+  const [
+    { data: recurring, error: recurringError },
+    { data: categories },
+    { data: profiles },
+  ] = await Promise.all([
+    supabase
+      .from("recurring_expenses")
+      .select(
+        "id, user_id, category_id, amount, note, day_of_month, active, split_equally, created_at, categories ( id, name, icon ), profiles ( id, display_name )"
+      )
+      .order("day_of_month", { ascending: true }),
+    supabase
+      .from("categories")
+      .select("id, name, icon, color, sort_order, created_at")
+      .order("sort_order", { ascending: true }),
+    supabase.from("profiles").select("id, display_name, color, created_at"),
+  ]);
+
+  if (recurringError) {
+    console.error("recurring: erro ao buscar recurring_expenses:", recurringError);
+  }
 
   const toggleWithId = async (id: string, next: boolean) => {
     "use server";

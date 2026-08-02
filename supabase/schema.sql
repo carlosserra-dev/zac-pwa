@@ -50,6 +50,21 @@ create index if not exists transactions_date_idx on public.transactions (transac
 create index if not exists transactions_category_idx on public.transactions (category_id);
 create index if not exists transactions_recurring_idx on public.transactions (recurring_expense_id);
 
+-- Liga user_id diretamente a public.profiles (além de auth.users), pra que
+-- o Supabase consiga fazer o "join" automático usado pelo app ao buscar
+-- quem gastou cada lançamento.
+alter table public.recurring_expenses
+  drop constraint if exists recurring_expenses_user_id_fkey_profiles;
+alter table public.recurring_expenses
+  add constraint recurring_expenses_user_id_fkey_profiles
+  foreign key (user_id) references public.profiles (id) on delete cascade;
+
+alter table public.transactions
+  drop constraint if exists transactions_user_id_fkey_profiles;
+alter table public.transactions
+  add constraint transactions_user_id_fkey_profiles
+  foreign key (user_id) references public.profiles (id) on delete cascade;
+
 -- ============================================================
 -- Row Level Security
 -- App é só para vocês dois: qualquer usuário autenticado no

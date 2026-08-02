@@ -32,13 +32,17 @@ export default async function OverviewPage() {
   const rangeStart = monthRange(5); // 6 meses no total (mês atual + 5 anteriores)
   const rangeStartStr = rangeStart.toISOString().slice(0, 10);
 
-  const { data: transactions } = await supabase
+  const { data: transactions, error: transactionsError } = await supabase
     .from("transactions")
     .select(
       "id, user_id, category_id, amount, note, transaction_date, recurring_expense_id, created_at, categories ( id, name, icon, color ), profiles ( id, display_name, color )"
     )
     .gte("transaction_date", rangeStartStr)
     .order("transaction_date", { ascending: false });
+
+  if (transactionsError) {
+    console.error("overview: erro ao buscar transactions:", transactionsError);
+  }
 
   const all = (transactions as unknown as TransactionWithRelations[]) ?? [];
 
