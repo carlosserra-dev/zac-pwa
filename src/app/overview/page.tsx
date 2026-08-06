@@ -26,7 +26,13 @@ function monthRange(monthsBack: number) {
   return start;
 }
 
-export default async function OverviewPage() {
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ person?: string }>;
+}) {
+  const { person: selectedPersonId } = await searchParams;
+
   const supabase = await createClient();
 
   const rangeStart = monthRange(5); // 6 meses no total (mês atual + 5 anteriores)
@@ -56,12 +62,43 @@ export default async function OverviewPage() {
 
   const totalMonth = currentMonthTx.reduce((sum, t) => sum + Number(t.amount), 0);
 
-  // Por categoria
+  // Por pessoa
+  const byPersonMap = new Map<
+    string,
+    { id: string; name: string; color: string; total: number }
+  >();
+  for (const t of currentMonthTx) {
+    const key = t.user_id;
+    const p = t.profiles;
+    const existing = byPersonMap.get(key);
+    if (existing) {
+      existing.total += Number(t.amount);
+    } else {
+      byPersonMap.set(key, {
+        id: key,
+        name: p?.display_name ?? "—",
+        color: p?.color ?? "#6366f1",
+        total: Number(t.amount),
+      });
+    }
+  }
+  const byPerson = Array.from(byPersonMap.values()).sort((a, b) => b.total - a.total);
+
+  // Filtro por pessoa (opcional, via ?person=<id>)
+  const activePerson = selectedPersonId
+    ? byPerson.find((p) => p.id === selectedPersonId)
+    : undefined;
+  const displayTx = activePerson
+    ? currentMonthTx.filter((t) => t.user_id === activePerson.id)
+    : currentMonthTx;
+  const displayTotal = activePerson ? activePerson.total : totalMonth;
+
+  // Por categoria (respeita o filtro de pessoa, se houver)
   const byCategoryMap = new Map<
     string,
     { name: string; icon: string; color: string; total: number }
   >();
-  for (const t of currentMonthTx) {
+  for (const t of displayTx) {
     const key = t.category_id;
     const cat = t.categories;
     const existing = byCategoryMap.get(key);
@@ -79,24 +116,6 @@ export default async function OverviewPage() {
   const byCategory = Array.from(byCategoryMap.values()).sort(
     (a, b) => b.total - a.total
   );
-
-  // Por pessoa
-  const byPersonMap = new Map<string, { name: string; color: string; total: number }>();
-  for (const t of currentMonthTx) {
-    const key = t.user_id;
-    const p = t.profiles;
-    const existing = byPersonMap.get(key);
-    if (existing) {
-      existing.total += Number(t.amount);
-    } else {
-      byPersonMap.set(key, {
-        name: p?.display_name ?? "—",
-        color: p?.color ?? "#6366f1",
-        total: Number(t.amount),
-      });
-    }
-  }
-  const byPerson = Array.from(byPersonMap.values()).sort((a, b) => b.total - a.total);
 
   // Comparativo dos últimos 6 meses
   const months: MonthTotal[] = [];
@@ -135,27 +154,53 @@ export default async function OverviewPage() {
         </h1>
 
         <div className="mt-4 rounded-2xl bg-slate-900 px-5 py-6 text-white dark:bg-slate-800">
-          <p className="text-xs text-slate-300">Total gasto este mês</p>
+          <p className="text-xs text-slate-300">
+            {activePerson ? `Total de ${activePerson.name} este mês` : "Total gasto este mês"}
+          </p>
           <p className="mt-1 text-3xl font-semibold">
-            R$ {totalMonth.toFixed(2)}
+            R$ {displayTotal.toFixed(2)}
           </p>
         </div>
 
         {byPerson.length > 0 && (
-          <div className="mt-4 flex gap-2">
-            {byPerson.map((p) => (
-              <div
-                key={p.name}
-                className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900"
+          <div className="mt-4">
+            <div className="flex gap-2">
+              {byPerson.map((p) => {
+                const isActive = activePerson?.id === p.id;
+                return (
+                  <Link
+                    key={p.id}
+                    href={isActive ? "/overview" : `/overview?person=${p.id}`}
+                    className={`flex-1 rounded-xl border px-3 py-3 text-left transition active:scale-[0.98] ${
+                      isActive
+                        ? "border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-500/10"
+                        : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+                    }`}
+                  >
+                    <p
+                      className={`text-xs ${
+                        isActive
+                          ? "text-indigo-600 dark:text-indigo-400"
+                          : "text-slate-500 dark:text-slate-400"
+                      }`}
+                    >
+                      {p.name}
+                    </p>
+                    <p className="text-base font-semibold text-slate-800 dark:text-slate-200">
+                      R$ {p.total.toFixed(2)}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+            {activePerson && (
+              <Link
+                href="/overview"
+                className="mt-2 inline-block text-xs text-slate-500 underline dark:text-slate-400"
               >
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {p.name}
-                </p>
-                <p className="text-base font-semibold text-slate-800 dark:text-slate-200">
-                  R$ {p.total.toFixed(2)}
-                </p>
-              </div>
-            ))}
+                Ver todos
+              </Link>
+            )}
           </div>
         )}
 
@@ -176,7 +221,7 @@ export default async function OverviewPage() {
             </p>
           )}
           {byCategory.map((c) => {
-            const pct = totalMonth > 0 ? (c.total / totalMonth) * 100 : 0;
+            const pct = displayTotal > 0 ? (c.total / displayTotal) * 100 : 0;
             return (
               <div
                 key={c.name}
@@ -202,10 +247,10 @@ export default async function OverviewPage() {
         </div>
 
         <h2 className="mt-8 mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
-          Lançamentos do mês
+          {activePerson ? `Lançamentos de ${activePerson.name}` : "Lançamentos do mês"}
         </h2>
         <div className="space-y-2 pb-4">
-          {currentMonthTx.map((t) => (
+          {displayTx.map((t) => (
             <div
               key={t.id}
               className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
@@ -234,6 +279,11 @@ export default async function OverviewPage() {
               </form>
             </div>
           ))}
+          {displayTx.length === 0 && (
+            <p className="text-sm text-slate-400 dark:text-slate-500">
+              Nenhum lançamento aqui ainda.
+            </p>
+          )}
         </div>
       </main>
       <BottomNav />
