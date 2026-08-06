@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { signOut, updateDisplayName, updatePassword } from "@/lib/actions";
 import { BottomNav } from "@/components/BottomNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { SubmitButton } from "@/components/SubmitButton";
 
 const ERROR_MESSAGES: Record<string, string> = {
   name: "Preencha um nome válido.",
@@ -86,12 +87,12 @@ export default async function SettingsPage({
               required
               className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
-            <button
-              type="submit"
+            <SubmitButton
+              pendingLabel="Salvando..."
               className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition active:scale-95 dark:bg-slate-100 dark:text-slate-900"
             >
               Salvar
-            </button>
+            </SubmitButton>
           </form>
         </section>
 
@@ -118,23 +119,23 @@ export default async function SettingsPage({
               autoComplete="new-password"
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
-            <button
-              type="submit"
+            <SubmitButton
+              pendingLabel="Alterando..."
               className="w-full rounded-lg bg-slate-900 py-2 text-sm font-medium text-white transition active:scale-95 dark:bg-slate-100 dark:text-slate-900"
             >
               Alterar senha
-            </button>
+            </SubmitButton>
           </form>
         </section>
 
         <section className="mt-10">
           <form action={signOut}>
-            <button
-              type="submit"
+            <SubmitButton
+              pendingLabel="Saindo..."
               className="w-full rounded-lg bg-red-50 py-3 text-sm font-medium text-red-600 transition active:scale-95 dark:bg-red-500/10 dark:text-red-400"
             >
               Sair da conta
-            </button>
+            </SubmitButton>
           </form>
         </section>
 

@@ -1,4 +1,5 @@
 import { signIn } from "@/lib/actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export default async function LoginPage({
   searchParams,
@@ -56,12 +57,12 @@ export default async function LoginPage({
             </p>
           )}
 
-          <button
-            type="submit"
+          <SubmitButton
+            pendingLabel="Entrando..."
             className="w-full rounded-xl bg-indigo-600 py-3 font-medium text-white transition active:scale-[0.98] hover:bg-indigo-700 active:bg-indigo-800"
           >
             Entrar
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </main>

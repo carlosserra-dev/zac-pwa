@@ -6,6 +6,7 @@ import {
   updateCategory,
 } from "@/lib/actions";
 import { BottomNav } from "@/components/BottomNav";
+import { SubmitButton } from "@/components/SubmitButton";
 import type { Category } from "@/types/database";
 
 const COLOR_OPTIONS = [
@@ -133,12 +134,12 @@ export default async function CategoriesPage({
                     ))}
                   </div>
                   <div className="flex gap-2 pt-1">
-                    <button
-                      type="submit"
+                    <SubmitButton
+                      pendingLabel="Salvando..."
                       className="flex-1 rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white transition active:scale-95"
                     >
                       Salvar
-                    </button>
+                    </SubmitButton>
                     <button
                       formAction={deleteCategoryWithId.bind(null, cat.id)}
                       className="flex-1 rounded-lg bg-red-50 py-2 text-sm font-medium text-red-600 transition active:scale-95 dark:bg-red-500/10 dark:text-red-400"
@@ -190,12 +191,12 @@ export default async function CategoriesPage({
                 </label>
               ))}
             </div>
-            <button
-              type="submit"
+            <SubmitButton
+              pendingLabel="Adicionando..."
               className="w-full rounded-lg bg-slate-900 py-2 text-sm font-medium text-white transition active:scale-95 dark:bg-slate-100 dark:text-slate-900"
             >
               Adicionar categoria
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </main>

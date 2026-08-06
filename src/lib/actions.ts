@@ -4,6 +4,24 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+const RECURRING_GENERATED_KEY = "recurring_generated_month";
+
+function currentYearMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+async function resetRecurringGenerationGate(
+  supabase: Awaited<ReturnType<typeof createClient>>
+) {
+  // Força o gerador a reavaliar no próximo carregamento do dashboard
+  // (usado quando uma recorrência é criada ou reativada no meio do mês).
+  await supabase
+    .from("app_settings")
+    .delete()
+    .eq("key", RECURRING_GENERATED_KEY);
+}
+
 // ---------- Autenticação ----------
 
 export async function signIn(formData: FormData) {
@@ -181,26 +199,47 @@ export async function addRecurringExpense(formData: FormData) {
   const dayOfMonth = Number.parseInt(String(formData.get("day_of_month") || "1"), 10);
   const spentBy = String(formData.get("spent_by") || "");
   const splitEqually = formData.get("split_equally") === "on";
+  const installmentsType = String(formData.get("installments_type") || "none");
+  const installmentsTotalRaw = Number.parseInt(
+    String(formData.get("installments_total") || ""),
+    10
+  );
+  const installmentsTotal =
+    installmentsType === "count" &&
+    Number.isFinite(installmentsTotalRaw) &&
+    installmentsTotalRaw > 0
+      ? installmentsTotalRaw
+      : null;
 
-  if (!categoryId || (!splitEqually && !spentBy) || !Number.isFinite(amount) || amount <= 0) {
+  if (
+    !categoryId ||
+    !spentBy ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    (installmentsType === "count" && !installmentsTotal)
+  ) {
     redirect("/recurring?error=1");
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { error } = await supabase.from("recurring_expenses").insert({
     category_id: categoryId,
-    user_id: spentBy || user?.id,
+    user_id: spentBy,
     amount,
     note,
     day_of_month: Number.isFinite(dayOfMonth) ? Math.min(28, Math.max(1, dayOfMonth)) : 1,
     split_equally: splitEqually,
+    installments_total: installmentsTotal,
+    installments_generated: 0,
   });
 
-  if (error) redirect("/recurring?error=1");
+  if (error) {
+    console.error("addRecurringExpense insert error:", error);
+    redirect("/recurring?error=1");
+  }
+
+  await resetRecurringGenerationGate(supabase);
 
   revalidatePath("/recurring");
   redirect("/recurring?saved=1");
@@ -209,6 +248,9 @@ export async function addRecurringExpense(formData: FormData) {
 export async function toggleRecurringExpense(id: string, active: boolean) {
   const supabase = await createClient();
   await supabase.from("recurring_expenses").update({ active }).eq("id", id);
+  if (active) {
+    await resetRecurringGenerationGate(supabase);
+  }
   revalidatePath("/recurring");
 }
 
@@ -220,17 +262,33 @@ export async function deleteRecurringExpense(id: string) {
 
 // Gera os lançamentos do mês corrente para as despesas recorrentes ativas,
 // caso ainda não tenham sido lançadas. Chamado ao abrir o dashboard.
+// Só faz o trabalho pesado uma vez por mês (controlado por app_settings) -
+// nas outras vezes é só uma leitura rápida por chave primária.
 export async function ensureRecurringForCurrentMonth() {
   const supabase = await createClient();
+  const yearMonth = currentYearMonth();
+
+  const { data: gate } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", RECURRING_GENERATED_KEY)
+    .maybeSingle();
+
+  if (gate?.value === yearMonth) return;
 
   const { data: recurring } = await supabase
     .from("recurring_expenses")
     .select(
-      "id, user_id, category_id, amount, note, day_of_month, active, split_equally"
+      "id, user_id, category_id, amount, note, day_of_month, active, split_equally, installments_total, installments_generated"
     )
     .eq("active", true);
 
-  if (!recurring || recurring.length === 0) return;
+  if (!recurring || recurring.length === 0) {
+    await supabase
+      .from("app_settings")
+      .upsert({ key: RECURRING_GENERATED_KEY, value: yearMonth });
+    return;
+  }
 
   const now = new Date();
   const year = now.getFullYear();
@@ -248,60 +306,79 @@ export async function ensureRecurringForCurrentMonth() {
   const already = new Set((existing || []).map((t) => t.recurring_expense_id));
   const pending = recurring.filter((r) => !already.has(r.id));
 
-  if (pending.length === 0) return;
+  if (pending.length > 0) {
+    const needsProfiles = pending.some((r) => r.split_equally);
+    let profileIds: string[] = [];
+    if (needsProfiles) {
+      const { data: profiles } = await supabase.from("profiles").select("id");
+      profileIds = (profiles || []).map((p) => p.id);
+    }
 
-  const needsProfiles = pending.some((r) => r.split_equally);
-  const profileIds: string[] = [];
-  if (needsProfiles) {
-    const { data: profiles } = await supabase.from("profiles").select("id");
-    profileIds.push(...(profiles || []).map((p) => p.id));
-  }
+    for (const r of pending) {
+      const day = Math.min(r.day_of_month, 28);
+      const date = new Date(year, month, day).toISOString().slice(0, 10);
+      const baseNote = r.note ? `${r.note} (recorrente)` : "Recorrente";
+      const otherProfileId = profileIds.find((id) => id !== r.user_id);
 
-  const toInsert: {
-    category_id: string;
-    user_id: string;
-    amount: number;
-    note: string;
-    transaction_date: string;
-    recurring_expense_id: string;
-  }[] = [];
-
-  for (const r of pending) {
-    const day = Math.min(r.day_of_month, 28);
-    const date = new Date(year, month, day).toISOString().slice(0, 10);
-    const baseNote = r.note ? `${r.note} (recorrente)` : "Recorrente";
-
-    if (r.split_equally && profileIds.length > 1) {
-      // Divide em partes iguais (centavo extra fica com a primeira pessoa)
-      const totalCents = Math.round(r.amount * 100);
-      const share = Math.floor(totalCents / profileIds.length);
-      let remainder = totalCents - share * profileIds.length;
-
-      for (const profileId of profileIds) {
-        const cents = share + (remainder > 0 ? 1 : 0);
-        if (remainder > 0) remainder -= 1;
-        toInsert.push({
+      const { data: inserted, error: insertError } = await supabase
+        .from("transactions")
+        .insert({
           category_id: r.category_id,
-          user_id: profileId,
-          amount: cents / 100,
-          note: `${baseNote} - dividido`,
+          user_id: r.user_id,
+          amount: r.amount,
+          note: r.split_equally ? `${baseNote} - dividido` : baseNote,
           transaction_date: date,
           recurring_expense_id: r.id,
-        });
+        })
+        .select("id")
+        .single();
+
+      if (insertError || !inserted) {
+        console.error("ensureRecurringForCurrentMonth insert error:", insertError);
+        continue;
       }
-    } else {
-      toInsert.push({
-        category_id: r.category_id,
-        user_id: r.user_id,
-        amount: r.amount,
-        note: baseNote,
-        transaction_date: date,
-        recurring_expense_id: r.id,
-      });
+
+      if (r.split_equally && otherProfileId) {
+        const share = Math.round((r.amount / 2) * 100) / 100;
+        const { error: debtError } = await supabase.from("debts").insert({
+          transaction_id: inserted.id,
+          creditor_id: r.user_id,
+          debtor_id: otherProfileId,
+          amount: share,
+        });
+        if (debtError) {
+          console.error("ensureRecurringForCurrentMonth debt error:", debtError);
+        }
+      }
+
+      if (r.installments_total) {
+        const nextCount = r.installments_generated + 1;
+        const updates: Record<string, unknown> = {
+          installments_generated: nextCount,
+        };
+        if (nextCount >= r.installments_total) {
+          updates.active = false;
+        }
+        await supabase
+          .from("recurring_expenses")
+          .update(updates)
+          .eq("id", r.id);
+      }
     }
   }
 
-  if (toInsert.length > 0) {
-    await supabase.from("transactions").insert(toInsert);
-  }
+  await supabase
+    .from("app_settings")
+    .upsert({ key: RECURRING_GENERATED_KEY, value: yearMonth });
+}
+
+// ---------- Dívidas ----------
+
+export async function settleDebt(id: string, settled: boolean) {
+  const supabase = await createClient();
+  await supabase
+    .from("debts")
+    .update({ settled, settled_at: settled ? new Date().toISOString() : null })
+    .eq("id", id);
+  revalidatePath("/debts");
 }

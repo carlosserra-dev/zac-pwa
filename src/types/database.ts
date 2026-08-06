@@ -34,6 +34,19 @@ export type RecurringExpense = {
   day_of_month: number;
   active: boolean;
   split_equally: boolean;
+  installments_total: number | null;
+  installments_generated: number;
+  created_at: string;
+};
+
+export type Debt = {
+  id: string;
+  transaction_id: string;
+  creditor_id: string;
+  debtor_id: string;
+  amount: number;
+  settled: boolean;
+  settled_at: string | null;
   created_at: string;
 };
 

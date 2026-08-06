@@ -31,6 +31,8 @@ create table if not exists public.recurring_expenses (
   day_of_month integer not null default 1 check (day_of_month between 1 and 28),
   active boolean not null default true,
   split_equally boolean not null default false,
+  installments_total integer,
+  installments_generated integer not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -49,6 +51,31 @@ create table if not exists public.transactions (
 create index if not exists transactions_date_idx on public.transactions (transaction_date);
 create index if not exists transactions_category_idx on public.transactions (category_id);
 create index if not exists transactions_recurring_idx on public.transactions (recurring_expense_id);
+
+-- Dívidas: quando um gasto recorrente é dividido, quem pagou (creditor)
+-- fica com um crédito sobre o outro (debtor) até ele marcar como pago.
+create table if not exists public.debts (
+  id uuid primary key default gen_random_uuid(),
+  transaction_id uuid not null references public.transactions (id) on delete cascade,
+  creditor_id uuid not null references public.profiles (id) on delete cascade,
+  debtor_id uuid not null references public.profiles (id) on delete cascade,
+  amount numeric(12, 2) not null check (amount > 0),
+  settled boolean not null default false,
+  settled_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists debts_creditor_idx on public.debts (creditor_id);
+create index if not exists debts_debtor_idx on public.debts (debtor_id);
+
+-- Configurações internas do app (ex: controle de quando os gastos
+-- recorrentes já foram gerados no mês, pra não repetir o trabalho toda
+-- vez que o dashboard é aberto).
+create table if not exists public.app_settings (
+  key text primary key,
+  value text,
+  updated_at timestamptz not null default now()
+);
 
 -- Liga user_id diretamente a public.profiles (além de auth.users), pra que
 -- o Supabase consiga fazer o "join" automático usado pelo app ao buscar
@@ -79,6 +106,8 @@ alter table public.profiles enable row level security;
 alter table public.categories enable row level security;
 alter table public.recurring_expenses enable row level security;
 alter table public.transactions enable row level security;
+alter table public.debts enable row level security;
+alter table public.app_settings enable row level security;
 
 create policy "profiles: authenticated read" on public.profiles
   for select to authenticated using (true);
@@ -95,6 +124,24 @@ create policy "recurring_expenses: authenticated full access" on public.recurrin
 
 create policy "transactions: authenticated full access" on public.transactions
   for all to authenticated using (true) with check (true);
+
+create policy "debts: authenticated full access" on public.debts
+  for all to authenticated using (true) with check (true);
+
+create policy "app_settings: authenticated full access" on public.app_settings
+  for all to authenticated using (true) with check (true);
+
+-- Permissão de acesso às tabelas em si (separado do RLS acima). Sem isso,
+-- mesmo com as políticas certas, o Postgres bloqueia tudo com "permission
+-- denied" - necessário porque "Automatically expose new tables" fica
+-- desligado no painel do Supabase.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.profiles to authenticated;
+grant select, insert, update, delete on public.categories to authenticated;
+grant select, insert, update, delete on public.recurring_expenses to authenticated;
+grant select, insert, update, delete on public.transactions to authenticated;
+grant select, insert, update, delete on public.debts to authenticated;
+grant select, insert, update, delete on public.app_settings to authenticated;
 
 -- ============================================================
 -- Cria o perfil automaticamente quando um usuário se cadastra

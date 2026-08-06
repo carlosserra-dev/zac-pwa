@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { addTransaction } from "@/lib/actions";
+import { SubmitButton } from "@/components/SubmitButton";
 import type { Category, Profile } from "@/types/database";
 
 export default async function AddExpensePage({
@@ -122,12 +123,12 @@ export default async function AddExpensePage({
           </p>
         )}
 
-        <button
-          type="submit"
+        <SubmitButton
+          pendingLabel="Salvando..."
           className="mt-auto w-full rounded-xl bg-indigo-600 py-4 font-medium text-white transition active:scale-[0.98] hover:bg-indigo-700 active:bg-indigo-800"
         >
           Salvar gasto
-        </button>
+        </SubmitButton>
       </form>
     </main>
   );

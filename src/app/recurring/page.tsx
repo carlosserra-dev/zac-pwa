@@ -6,6 +6,7 @@ import {
   toggleRecurringExpense,
 } from "@/lib/actions";
 import { BottomNav } from "@/components/BottomNav";
+import { SubmitButton } from "@/components/SubmitButton";
 import type { Category, Profile, RecurringExpense } from "@/types/database";
 
 type RecurringWithCategory = RecurringExpense & {
@@ -30,7 +31,7 @@ export default async function RecurringPage({
     supabase
       .from("recurring_expenses")
       .select(
-        "id, user_id, category_id, amount, note, day_of_month, active, split_equally, created_at, categories ( id, name, icon ), profiles ( id, display_name )"
+        "id, user_id, category_id, amount, note, day_of_month, active, split_equally, installments_total, installments_generated, created_at, categories ( id, name, icon ), profiles ( id, display_name )"
       )
       .order("day_of_month", { ascending: true }),
     supabase
@@ -62,7 +63,7 @@ export default async function RecurringPage({
     <>
       <main className="mx-auto w-full max-w-md flex-1 px-5 pb-6 pt-8">
         <Link
-          href="/"
+          href="/menu"
           className="mb-4 inline-block text-sm text-slate-500 dark:text-slate-400"
         >
           ← Voltar
@@ -87,48 +88,53 @@ export default async function RecurringPage({
         )}
 
         <div className="mt-6 space-y-2">
-          {typedRecurring.map((r) => (
-            <div
-              key={r.id}
-              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
-            >
-              <span className="shrink-0 text-xl">{r.categories?.icon ?? "📦"}</span>
-              <div className="min-w-0 flex-1">
-                <p className="break-words text-sm font-medium text-slate-800 dark:text-slate-200">
-                  {r.categories?.name ?? "Categoria"} · dia {r.day_of_month}
-                </p>
-                <p className="break-words text-xs text-slate-500 dark:text-slate-400">
-                  R$ {Number(r.amount).toFixed(2)}
-                  {r.split_equally
-                    ? " · 🤝 Dividido"
-                    : r.profiles?.display_name
-                      ? ` · ${r.profiles.display_name}`
+          {typedRecurring.map((r) => {
+            const otherProfile = typedProfiles.find((p) => p.id !== r.user_id);
+            return (
+              <div
+                key={r.id}
+                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
+              >
+                <span className="shrink-0 text-xl">{r.categories?.icon ?? "📦"}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="break-words text-sm font-medium text-slate-800 dark:text-slate-200">
+                    {r.categories?.name ?? "Categoria"} · dia {r.day_of_month}
+                  </p>
+                  <p className="break-words text-xs text-slate-500 dark:text-slate-400">
+                    R$ {Number(r.amount).toFixed(2)}
+                    {r.profiles?.display_name ? ` · ${r.profiles.display_name} paga` : ""}
+                    {r.split_equally && otherProfile
+                      ? ` · 🤝 ${otherProfile.display_name} deve a metade`
                       : ""}
-                  {r.note ? ` · ${r.note}` : ""}
-                </p>
+                    {r.installments_total
+                      ? ` · ${r.installments_generated}/${r.installments_total} parcelas`
+                      : ""}
+                    {r.note ? ` · ${r.note}` : ""}
+                  </p>
+                </div>
+                <form action={toggleWithId.bind(null, r.id, !r.active)}>
+                  <button
+                    type="submit"
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition active:scale-90 ${
+                      r.active
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+                        : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                    }`}
+                  >
+                    {r.active ? "Ativo" : "Pausado"}
+                  </button>
+                </form>
+                <form action={deleteWithId.bind(null, r.id)}>
+                  <button
+                    type="submit"
+                    className="shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs text-red-600 transition active:scale-90 dark:bg-red-500/10 dark:text-red-400"
+                  >
+                    ✕
+                  </button>
+                </form>
               </div>
-              <form action={toggleWithId.bind(null, r.id, !r.active)}>
-                <button
-                  type="submit"
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition active:scale-90 ${
-                    r.active
-                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
-                      : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                  }`}
-                >
-                  {r.active ? "Ativo" : "Pausado"}
-                </button>
-              </form>
-              <form action={deleteWithId.bind(null, r.id)}>
-                <button
-                  type="submit"
-                  className="shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs text-red-600 transition active:scale-90 dark:bg-red-500/10 dark:text-red-400"
-                >
-                  ✕
-                </button>
-              </form>
-            </div>
-          ))}
+            );
+          })}
           {typedRecurring.length === 0 && (
             <p className="text-sm text-slate-400 dark:text-slate-500">
               Nenhum gasto recorrente cadastrado ainda.
@@ -154,6 +160,21 @@ export default async function RecurringPage({
               ))}
             </select>
 
+            {typedProfiles.length > 0 && (
+              <select
+                name="spent_by"
+                required
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              >
+                <option value="">Quem paga?</option>
+                {typedProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.display_name}
+                  </option>
+                ))}
+              </select>
+            )}
+
             {typedProfiles.length > 1 && (
               <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 transition active:scale-[0.99] dark:border-slate-700 dark:text-slate-300">
                 <input
@@ -161,30 +182,8 @@ export default async function RecurringPage({
                   name="split_equally"
                   className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600"
                 />
-                🤝 Dividir 50/50 entre vocês dois
+                🤝 Dividir 50/50 — a outra pessoa fica devendo a metade
               </label>
-            )}
-
-            {typedProfiles.length > 0 && (
-              <div>
-                <select
-                  name="spent_by"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                >
-                  <option value="">Quem paga?</option>
-                  {typedProfiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.display_name}
-                    </option>
-                  ))}
-                </select>
-                {typedProfiles.length > 1 && (
-                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                    Ignorado se &ldquo;dividir 50/50&rdquo; estiver marcado
-                    acima.
-                  </p>
-                )}
-              </div>
             )}
 
             <div className="grid grid-cols-2 gap-2">
@@ -217,18 +216,55 @@ export default async function RecurringPage({
                 />
               </div>
             </div>
+
+            <fieldset className="[&:has(input[value=count]:checked)_.installments-count-input]:block">
+              <legend className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
+                Duração
+              </legend>
+              <div className="flex gap-2">
+                <label className="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-center text-sm text-slate-600 transition active:scale-95 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700 dark:border-slate-700 dark:text-slate-400 dark:has-[:checked]:border-indigo-400 dark:has-[:checked]:bg-indigo-500/10 dark:has-[:checked]:text-indigo-300">
+                  <input
+                    type="radio"
+                    name="installments_type"
+                    value="none"
+                    defaultChecked
+                    className="sr-only"
+                  />
+                  Sem fim
+                </label>
+                <label className="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-center text-sm text-slate-600 transition active:scale-95 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700 dark:border-slate-700 dark:text-slate-400 dark:has-[:checked]:border-indigo-400 dark:has-[:checked]:bg-indigo-500/10 dark:has-[:checked]:text-indigo-300">
+                  <input
+                    type="radio"
+                    name="installments_type"
+                    value="count"
+                    className="sr-only"
+                  />
+                  Com parcelas
+                </label>
+              </div>
+              <div className="installments-count-input mt-2 hidden">
+                <input
+                  type="number"
+                  name="installments_total"
+                  min="1"
+                  placeholder="Número de parcelas (ex: 12)"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+            </fieldset>
+
             <input
               type="text"
               name="note"
               placeholder="Observação (ex: aluguel apto)"
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
-            <button
-              type="submit"
+            <SubmitButton
+              pendingLabel="Adicionando..."
               className="w-full rounded-lg bg-slate-900 py-2 text-sm font-medium text-white transition active:scale-95 dark:bg-slate-100 dark:text-slate-900"
             >
               Adicionar recorrente
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </main>
