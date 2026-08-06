@@ -3,17 +3,34 @@ import { createClient } from "@/lib/supabase/server";
 import {
   addRecurringExpense,
   deleteRecurringExpense,
+  duplicateRecurringExpense,
   toggleRecurringExpense,
   updateRecurringExpense,
 } from "@/lib/actions";
 import { BottomNav } from "@/components/BottomNav";
 import { SubmitButton } from "@/components/SubmitButton";
-import type { Category, Profile, RecurringExpense } from "@/types/database";
+import { ConfirmForm } from "@/components/ConfirmForm";
+import { RecurringEditForm } from "@/components/RecurringEditForm";
+import type {
+  Category,
+  Profile,
+  RecurringExpense,
+  RecurringExpenseChange,
+} from "@/types/database";
 
 type RecurringWithCategory = RecurringExpense & {
   categories: Pick<Category, "id" | "name" | "icon"> | null;
   profiles: Pick<Profile, "id" | "display_name"> | null;
 };
+
+function formatChangeDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default async function RecurringPage({
   searchParams,
@@ -28,6 +45,7 @@ export default async function RecurringPage({
     { data: recurring, error: recurringError },
     { data: categories },
     { data: profiles },
+    { data: changes },
   ] = await Promise.all([
     supabase
       .from("recurring_expenses")
@@ -40,6 +58,10 @@ export default async function RecurringPage({
       .select("id, name, icon, color, sort_order, created_at")
       .order("sort_order", { ascending: true }),
     supabase.from("profiles").select("id, display_name, color, created_at"),
+    supabase
+      .from("recurring_expense_changes")
+      .select("id, recurring_expense_id, field, old_value, new_value, changed_at")
+      .order("changed_at", { ascending: false }),
   ]);
 
   if (recurringError) {
@@ -56,6 +78,11 @@ export default async function RecurringPage({
     await deleteRecurringExpense(id);
   };
 
+  const duplicateWithId = async (id: string) => {
+    "use server";
+    await duplicateRecurringExpense(id);
+  };
+
   const updateWithId = async (id: string, formData: FormData) => {
     "use server";
     await updateRecurringExpense(id, formData);
@@ -64,6 +91,13 @@ export default async function RecurringPage({
   const typedRecurring = (recurring as unknown as RecurringWithCategory[]) ?? [];
   const typedCategories = (categories as Category[] | null) ?? [];
   const typedProfiles = (profiles as Profile[] | null) ?? [];
+  const typedChanges = (changes as RecurringExpenseChange[] | null) ?? [];
+  const changesByRecId = new Map<string, RecurringExpenseChange[]>();
+  for (const c of typedChanges) {
+    const list = changesByRecId.get(c.recurring_expense_id) ?? [];
+    list.push(c);
+    changesByRecId.set(c.recurring_expense_id, list);
+  }
 
   return (
     <>
@@ -134,8 +168,8 @@ export default async function RecurringPage({
                 </summary>
 
                 <div className="border-t border-slate-100 px-4 py-4 dark:border-slate-800">
-                  <div className="mb-3 flex gap-2">
-                    <form action={toggleWithId.bind(null, r.id, !r.active)} className="flex-1">
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    <form action={toggleWithId.bind(null, r.id, !r.active)}>
                       <button
                         type="submit"
                         className={`w-full rounded-lg py-2 text-sm font-medium transition active:scale-95 ${
@@ -147,17 +181,34 @@ export default async function RecurringPage({
                         {r.active ? "Pausar" : "Reativar"}
                       </button>
                     </form>
-                    <form action={deleteWithId.bind(null, r.id)} className="flex-1">
+                    <form action={duplicateWithId.bind(null, r.id)}>
+                      <button
+                        type="submit"
+                        className="w-full rounded-lg bg-slate-100 py-2 text-sm font-medium text-slate-600 transition active:scale-95 dark:bg-slate-800 dark:text-slate-300"
+                      >
+                        Duplicar
+                      </button>
+                    </form>
+                    <ConfirmForm
+                      action={deleteWithId.bind(null, r.id)}
+                      confirmMessage={`Excluir "${r.categories?.name ?? "esta conta"}${
+                        r.note ? " - " + r.note : ""
+                      }"? Os lançamentos já gerados por ela continuam no Resumo, só a recorrência some.`}
+                    >
                       <button
                         type="submit"
                         className="w-full rounded-lg bg-red-50 py-2 text-sm font-medium text-red-600 transition active:scale-95 dark:bg-red-500/10 dark:text-red-400"
                       >
                         Excluir
                       </button>
-                    </form>
+                    </ConfirmForm>
                   </div>
 
-                  <form action={updateWithId.bind(null, r.id)} className="space-y-3">
+                  <RecurringEditForm
+                    action={updateWithId.bind(null, r.id)}
+                    originalAmount={Number(r.amount)}
+                    className="space-y-3"
+                  >
                     <select
                       name="category_id"
                       required
@@ -288,7 +339,32 @@ export default async function RecurringPage({
                     >
                       Salvar alterações
                     </SubmitButton>
-                  </form>
+                  </RecurringEditForm>
+
+                  {(changesByRecId.get(r.id)?.length ?? 0) > 0 && (
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-xs font-medium text-slate-500 dark:text-slate-400">
+                        Histórico de alterações
+                      </summary>
+                      <div className="mt-2 space-y-1.5">
+                        {changesByRecId.get(r.id)!.map((c) => (
+                          <p
+                            key={c.id}
+                            className="break-words text-xs text-slate-500 dark:text-slate-400"
+                          >
+                            <span className="font-medium text-slate-700 dark:text-slate-300">
+                              {c.field}:
+                            </span>{" "}
+                            {c.old_value ?? "—"} → {c.new_value ?? "—"}
+                            <span className="text-slate-400 dark:text-slate-600">
+                              {" "}
+                              · {formatChangeDate(c.changed_at)}
+                            </span>
+                          </p>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 </div>
               </details>
             );

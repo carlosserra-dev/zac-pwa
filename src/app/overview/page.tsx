@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { BottomNav } from "@/components/BottomNav";
 import { MonthsBarChart, type MonthTotal } from "@/components/MonthsBarChart";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { deleteTransaction } from "@/lib/actions";
 import type { Profile, TransactionWithRelations } from "@/types/database";
 
@@ -346,12 +347,15 @@ export default async function OverviewPage({
               </span>
               {item.deletable && (
                 <form action={deleteWithId.bind(null, item.txId)}>
-                  <button
+                  <ConfirmButton
                     type="submit"
+                    confirmMessage={`Excluir "${item.categoryName}${
+                      item.note ? " - " + item.note : ""
+                    }" (R$ ${item.amount.toFixed(2)})?`}
                     className="ml-1 shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs text-red-600 transition active:scale-90 dark:bg-red-500/10 dark:text-red-400"
                   >
                     ✕
-                  </button>
+                  </ConfirmButton>
                 </form>
               )}
             </div>

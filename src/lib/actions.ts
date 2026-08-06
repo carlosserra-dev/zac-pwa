@@ -276,6 +276,15 @@ export async function updateRecurringExpense(id: string, formData: FormData) {
   }
 
   const supabase = await createClient();
+
+  const { data: before } = await supabase
+    .from("recurring_expenses")
+    .select("category_id, user_id, amount, note, day_of_month, split_equally, installments_total")
+    .eq("id", id)
+    .maybeSingle();
+
+  const newDayOfMonth = Number.isFinite(dayOfMonth) ? Math.min(28, Math.max(1, dayOfMonth)) : 1;
+
   const { error } = await supabase
     .from("recurring_expenses")
     .update({
@@ -283,7 +292,7 @@ export async function updateRecurringExpense(id: string, formData: FormData) {
       user_id: spentBy,
       amount,
       note,
-      day_of_month: Number.isFinite(dayOfMonth) ? Math.min(28, Math.max(1, dayOfMonth)) : 1,
+      day_of_month: newDayOfMonth,
       split_equally: splitEqually,
       installments_total: installmentsTotal,
     })
@@ -294,12 +303,155 @@ export async function updateRecurringExpense(id: string, formData: FormData) {
     redirect("/recurring?error=1");
   }
 
+  if (before) {
+    await logRecurringChanges(supabase, id, before, {
+      category_id: categoryId,
+      user_id: spentBy,
+      amount,
+      note,
+      day_of_month: newDayOfMonth,
+      split_equally: splitEqually,
+      installments_total: installmentsTotal,
+    });
+  }
+
   // O valor ou o dia podem ter mudado - reavalia se falta gerar algo
   // ainda neste mês (não afeta lançamentos já gerados anteriormente).
   await resetRecurringGenerationGate(supabase);
 
   revalidatePath("/recurring");
   revalidatePath("/overview");
+  redirect("/recurring?saved=1");
+}
+
+type RecurringSnapshot = {
+  category_id: string;
+  user_id: string;
+  amount: number;
+  note: string | null;
+  day_of_month: number;
+  split_equally: boolean;
+  installments_total: number | null;
+};
+
+// Compara o estado antes/depois de uma edição e grava um registro por
+// campo alterado, com nomes legíveis (não só ids), pra dar pra revisar
+// depois "o que mudou e quando" sem precisar abrir o banco.
+async function logRecurringChanges(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  recurringExpenseId: string,
+  before: RecurringSnapshot,
+  after: RecurringSnapshot
+) {
+  const changes: { field: string; old_value: string | null; new_value: string | null }[] = [];
+
+  if (Number(before.amount) !== Number(after.amount)) {
+    changes.push({
+      field: "Valor",
+      old_value: `R$ ${Number(before.amount).toFixed(2)}`,
+      new_value: `R$ ${Number(after.amount).toFixed(2)}`,
+    });
+  }
+  if (before.day_of_month !== after.day_of_month) {
+    changes.push({
+      field: "Dia",
+      old_value: `dia ${before.day_of_month}`,
+      new_value: `dia ${after.day_of_month}`,
+    });
+  }
+  if ((before.note ?? "") !== (after.note ?? "")) {
+    changes.push({
+      field: "Observação",
+      old_value: before.note,
+      new_value: after.note,
+    });
+  }
+  if (before.split_equally !== after.split_equally) {
+    changes.push({
+      field: "Divisão",
+      old_value: before.split_equally ? "dividido 50/50" : "não dividido",
+      new_value: after.split_equally ? "dividido 50/50" : "não dividido",
+    });
+  }
+  if ((before.installments_total ?? null) !== (after.installments_total ?? null)) {
+    changes.push({
+      field: "Parcelas",
+      old_value: before.installments_total ? `${before.installments_total}x` : "sem fim",
+      new_value: after.installments_total ? `${after.installments_total}x` : "sem fim",
+    });
+  }
+
+  if (before.category_id !== after.category_id || before.user_id !== after.user_id) {
+    const [{ data: cats }, { data: profs }] = await Promise.all([
+      supabase.from("categories").select("id, name"),
+      supabase.from("profiles").select("id, display_name"),
+    ]);
+    const catName = (cid: string) => cats?.find((c) => c.id === cid)?.name ?? "categoria";
+    const profName = (pid: string) => profs?.find((p) => p.id === pid)?.display_name ?? "alguém";
+
+    if (before.category_id !== after.category_id) {
+      changes.push({
+        field: "Categoria",
+        old_value: catName(before.category_id),
+        new_value: catName(after.category_id),
+      });
+    }
+    if (before.user_id !== after.user_id) {
+      changes.push({
+        field: "Quem paga",
+        old_value: profName(before.user_id),
+        new_value: profName(after.user_id),
+      });
+    }
+  }
+
+  if (changes.length > 0) {
+    const { error } = await supabase.from("recurring_expense_changes").insert(
+      changes.map((c) => ({
+        recurring_expense_id: recurringExpenseId,
+        field: c.field,
+        old_value: c.old_value,
+        new_value: c.new_value,
+      }))
+    );
+    if (error) {
+      console.error("logRecurringChanges insert error:", error);
+    }
+  }
+}
+
+export async function duplicateRecurringExpense(id: string) {
+  const supabase = await createClient();
+  const { data: original } = await supabase
+    .from("recurring_expenses")
+    .select("category_id, user_id, amount, note, day_of_month, split_equally")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!original) {
+    redirect("/recurring?error=1");
+  }
+
+  const { error } = await supabase.from("recurring_expenses").insert({
+    category_id: original.category_id,
+    user_id: original.user_id,
+    amount: original.amount,
+    note: original.note ? `${original.note} (cópia)` : "Cópia",
+    day_of_month: original.day_of_month,
+    split_equally: original.split_equally,
+    installments_total: null,
+    installments_generated: 0,
+    active: true,
+  });
+
+  if (error) {
+    console.error("duplicateRecurringExpense error:", error);
+    redirect("/recurring?error=1");
+  }
+
+  await resetRecurringGenerationGate(supabase);
+
+  revalidatePath("/recurring");
   redirect("/recurring?saved=1");
 }
 

@@ -7,6 +7,7 @@ import {
 } from "@/lib/actions";
 import { BottomNav } from "@/components/BottomNav";
 import { SubmitButton } from "@/components/SubmitButton";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import type { Category } from "@/types/database";
 
 const COLOR_OPTIONS = [
@@ -140,12 +141,13 @@ export default async function CategoriesPage({
                     >
                       Salvar
                     </SubmitButton>
-                    <button
+                    <ConfirmButton
                       formAction={deleteCategoryWithId.bind(null, cat.id)}
+                      confirmMessage={`Excluir a categoria "${cat.name}"? Só é possível se não houver gastos lançados nela.`}
                       className="flex-1 rounded-lg bg-red-50 py-2 text-sm font-medium text-red-600 transition active:scale-95 dark:bg-red-500/10 dark:text-red-400"
                     >
                       Excluir
-                    </button>
+                    </ConfirmButton>
                   </div>
                 </form>
               </div>

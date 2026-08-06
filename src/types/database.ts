@@ -50,6 +50,15 @@ export type Debt = {
   created_at: string;
 };
 
+export type RecurringExpenseChange = {
+  id: string;
+  recurring_expense_id: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_at: string;
+};
+
 export type TransactionWithRelations = Transaction & {
   categories: Pick<Category, "id" | "name" | "icon" | "color"> | null;
   profiles: Pick<Profile, "id" | "display_name" | "color"> | null;

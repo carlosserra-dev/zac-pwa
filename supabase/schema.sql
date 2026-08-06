@@ -68,6 +68,21 @@ create table if not exists public.debts (
 create index if not exists debts_creditor_idx on public.debts (creditor_id);
 create index if not exists debts_debtor_idx on public.debts (debtor_id);
 
+-- Histórico de alterações em gastos recorrentes (valor, dia, categoria,
+-- quem paga, divisão, parcelas) - pra dar pra ver depois o que mudou e
+-- quando, sem precisar abrir o banco.
+create table if not exists public.recurring_expense_changes (
+  id uuid primary key default gen_random_uuid(),
+  recurring_expense_id uuid not null references public.recurring_expenses (id) on delete cascade,
+  field text not null,
+  old_value text,
+  new_value text,
+  changed_at timestamptz not null default now()
+);
+
+create index if not exists recurring_expense_changes_rec_idx
+  on public.recurring_expense_changes (recurring_expense_id);
+
 -- Configurações internas do app (ex: controle de quando os gastos
 -- recorrentes já foram gerados no mês, pra não repetir o trabalho toda
 -- vez que o dashboard é aberto).
@@ -108,6 +123,7 @@ alter table public.recurring_expenses enable row level security;
 alter table public.transactions enable row level security;
 alter table public.debts enable row level security;
 alter table public.app_settings enable row level security;
+alter table public.recurring_expense_changes enable row level security;
 
 create policy "profiles: authenticated read" on public.profiles
   for select to authenticated using (true);
@@ -131,6 +147,9 @@ create policy "debts: authenticated full access" on public.debts
 create policy "app_settings: authenticated full access" on public.app_settings
   for all to authenticated using (true) with check (true);
 
+create policy "recurring_expense_changes: authenticated full access" on public.recurring_expense_changes
+  for all to authenticated using (true) with check (true);
+
 -- Permissão de acesso às tabelas em si (separado do RLS acima). Sem isso,
 -- mesmo com as políticas certas, o Postgres bloqueia tudo com "permission
 -- denied" - necessário porque "Automatically expose new tables" fica
@@ -142,6 +161,7 @@ grant select, insert, update, delete on public.recurring_expenses to authenticat
 grant select, insert, update, delete on public.transactions to authenticated;
 grant select, insert, update, delete on public.debts to authenticated;
 grant select, insert, update, delete on public.app_settings to authenticated;
+grant select, insert, update, delete on public.recurring_expense_changes to authenticated;
 
 -- ============================================================
 -- Cria o perfil automaticamente quando um usuário se cadastra
