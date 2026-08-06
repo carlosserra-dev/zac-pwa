@@ -245,6 +245,42 @@ export async function addRecurringExpense(formData: FormData) {
   redirect("/recurring?saved=1");
 }
 
+export async function updateRecurringExpense(id: string, formData: FormData) {
+  const amountRaw = String(formData.get("amount") || "0").replace(",", ".");
+  const amount = Number.parseFloat(amountRaw);
+  const note = String(formData.get("note") || "").trim() || null;
+  const dayOfMonth = Number.parseInt(String(formData.get("day_of_month") || "1"), 10);
+  const splitEqually = formData.get("split_equally") === "on";
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    redirect("/recurring?error=1");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("recurring_expenses")
+    .update({
+      amount,
+      note,
+      day_of_month: Number.isFinite(dayOfMonth) ? Math.min(28, Math.max(1, dayOfMonth)) : 1,
+      split_equally: splitEqually,
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error("updateRecurringExpense error:", error);
+    redirect("/recurring?error=1");
+  }
+
+  // O valor ou o dia podem ter mudado - reavalia se falta gerar algo
+  // ainda neste mês (não afeta lançamentos já gerados anteriormente).
+  await resetRecurringGenerationGate(supabase);
+
+  revalidatePath("/recurring");
+  revalidatePath("/overview");
+  redirect("/recurring?saved=1");
+}
+
 export async function toggleRecurringExpense(id: string, active: boolean) {
   const supabase = await createClient();
   await supabase.from("recurring_expenses").update({ active }).eq("id", id);
