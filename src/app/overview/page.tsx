@@ -271,9 +271,9 @@ export default async function OverviewPage({
             {activePerson && (
               <Link
                 href="/overview"
-                className="mt-2 inline-block text-xs text-slate-500 underline dark:text-slate-400"
+                className="mt-2 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-600 transition active:scale-[0.98] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
               >
-                Ver todos
+                ↺ Ver todos
               </Link>
             )}
           </div>
