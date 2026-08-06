@@ -246,13 +246,32 @@ export async function addRecurringExpense(formData: FormData) {
 }
 
 export async function updateRecurringExpense(id: string, formData: FormData) {
+  const categoryId = String(formData.get("category_id") || "");
+  const spentBy = String(formData.get("spent_by") || "");
   const amountRaw = String(formData.get("amount") || "0").replace(",", ".");
   const amount = Number.parseFloat(amountRaw);
   const note = String(formData.get("note") || "").trim() || null;
   const dayOfMonth = Number.parseInt(String(formData.get("day_of_month") || "1"), 10);
   const splitEqually = formData.get("split_equally") === "on";
+  const installmentsType = String(formData.get("installments_type") || "none");
+  const installmentsTotalRaw = Number.parseInt(
+    String(formData.get("installments_total") || ""),
+    10
+  );
+  const installmentsTotal =
+    installmentsType === "count" &&
+    Number.isFinite(installmentsTotalRaw) &&
+    installmentsTotalRaw > 0
+      ? installmentsTotalRaw
+      : null;
 
-  if (!Number.isFinite(amount) || amount <= 0) {
+  if (
+    !categoryId ||
+    !spentBy ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    (installmentsType === "count" && !installmentsTotal)
+  ) {
     redirect("/recurring?error=1");
   }
 
@@ -260,10 +279,13 @@ export async function updateRecurringExpense(id: string, formData: FormData) {
   const { error } = await supabase
     .from("recurring_expenses")
     .update({
+      category_id: categoryId,
+      user_id: spentBy,
       amount,
       note,
       day_of_month: Number.isFinite(dayOfMonth) ? Math.min(28, Math.max(1, dayOfMonth)) : 1,
       split_equally: splitEqually,
+      installments_total: installmentsTotal,
     })
     .eq("id", id);
 

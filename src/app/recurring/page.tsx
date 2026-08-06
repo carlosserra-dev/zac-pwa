@@ -158,6 +158,36 @@ export default async function RecurringPage({
                   </div>
 
                   <form action={updateWithId.bind(null, r.id)} className="space-y-3">
+                    <select
+                      name="category_id"
+                      required
+                      defaultValue={r.category_id}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    >
+                      <option value="">Categoria</option>
+                      {typedCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.icon} {c.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {typedProfiles.length > 0 && (
+                      <select
+                        name="spent_by"
+                        required
+                        defaultValue={r.user_id}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      >
+                        <option value="">Quem paga?</option>
+                        {typedProfiles.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
                     <div className="grid grid-cols-2 gap-2">
                       <div className="min-w-0">
                         <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
@@ -200,6 +230,49 @@ export default async function RecurringPage({
                         🤝 Dividir 50/50 — a outra pessoa fica devendo a metade
                       </label>
                     )}
+
+                    <fieldset className="[&:has(input[value=count]:checked)_.installments-count-input]:block">
+                      <legend className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
+                        Duração
+                      </legend>
+                      <div className="flex gap-2">
+                        <label className="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-center text-sm text-slate-600 transition active:scale-95 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700 dark:border-slate-700 dark:text-slate-400 dark:has-[:checked]:border-indigo-400 dark:has-[:checked]:bg-indigo-500/10 dark:has-[:checked]:text-indigo-300">
+                          <input
+                            type="radio"
+                            name="installments_type"
+                            value="none"
+                            defaultChecked={!r.installments_total}
+                            className="sr-only"
+                          />
+                          Sem fim
+                        </label>
+                        <label className="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-center text-sm text-slate-600 transition active:scale-95 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700 dark:border-slate-700 dark:text-slate-400 dark:has-[:checked]:border-indigo-400 dark:has-[:checked]:bg-indigo-500/10 dark:has-[:checked]:text-indigo-300">
+                          <input
+                            type="radio"
+                            name="installments_type"
+                            value="count"
+                            defaultChecked={Boolean(r.installments_total)}
+                            className="sr-only"
+                          />
+                          Com parcelas
+                        </label>
+                      </div>
+                      <div className="installments-count-input mt-2 hidden">
+                        <input
+                          type="number"
+                          name="installments_total"
+                          min={Math.max(1, r.installments_generated)}
+                          defaultValue={r.installments_total ?? ""}
+                          placeholder="Número de parcelas (ex: 12)"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        />
+                      </div>
+                      {r.installments_total ? (
+                        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                          Já geradas: {r.installments_generated} de {r.installments_total}
+                        </p>
+                      ) : null}
+                    </fieldset>
 
                     <input
                       type="text"
