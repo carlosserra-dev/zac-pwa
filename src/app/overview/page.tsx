@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { BottomNav } from "@/components/BottomNav";
 import { MonthsBarChart, type MonthTotal } from "@/components/MonthsBarChart";
 import { deleteTransaction } from "@/lib/actions";
-import type { TransactionWithRelations } from "@/types/database";
+import type { Profile, TransactionWithRelations } from "@/types/database";
 
 const MONTH_LABELS = [
   "jan",
@@ -26,6 +26,8 @@ function monthRange(monthsBack: number) {
   return start;
 }
 
+type DebtLite = { transaction_id: string; creditor_id: string; debtor_id: string; amount: number };
+
 export default async function OverviewPage({
   searchParams,
 }: {
@@ -38,19 +40,45 @@ export default async function OverviewPage({
   const rangeStart = monthRange(5); // 6 meses no total (mês atual + 5 anteriores)
   const rangeStartStr = rangeStart.toISOString().slice(0, 10);
 
-  const { data: transactions, error: transactionsError } = await supabase
-    .from("transactions")
-    .select(
-      "id, user_id, category_id, amount, note, transaction_date, recurring_expense_id, created_at, categories ( id, name, icon, color ), profiles ( id, display_name, color )"
-    )
-    .gte("transaction_date", rangeStartStr)
-    .order("transaction_date", { ascending: false });
+  const [
+    { data: transactions, error: transactionsError },
+    { data: profiles },
+    { data: debts },
+  ] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select(
+        "id, user_id, category_id, amount, note, transaction_date, recurring_expense_id, created_at, categories ( id, name, icon, color ), profiles ( id, display_name, color )"
+      )
+      .gte("transaction_date", rangeStartStr)
+      .order("transaction_date", { ascending: false }),
+    supabase.from("profiles").select("id, display_name, color, created_at"),
+    supabase.from("debts").select("transaction_id, creditor_id, debtor_id, amount"),
+  ]);
 
   if (transactionsError) {
     console.error("overview: erro ao buscar transactions:", transactionsError);
   }
 
   const all = (transactions as unknown as TransactionWithRelations[]) ?? [];
+  const typedProfiles = (profiles as Profile[] | null) ?? [];
+  const debtsByTxId = new Map<string, DebtLite>(
+    ((debts as DebtLite[] | null) ?? []).map((d) => [d.transaction_id, d])
+  );
+
+  // Quanto de um lançamento é "responsabilidade" de determinada pessoa.
+  // Se o lançamento tiver uma dívida associada (conta dividida 50/50), a
+  // metade conta pra cada um, independente de quem pagou ou se já foi
+  // quitado entre eles - senão, conta 100% pra quem lançou.
+  function shareFor(t: TransactionWithRelations, personId: string) {
+    const debt = debtsByTxId.get(t.id);
+    if (debt) {
+      if (personId === debt.creditor_id) return Number(t.amount) - Number(debt.amount);
+      if (personId === debt.debtor_id) return Number(debt.amount);
+      return 0;
+    }
+    return t.user_id === personId ? Number(t.amount) : 0;
+  }
 
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
@@ -62,54 +90,96 @@ export default async function OverviewPage({
 
   const totalMonth = currentMonthTx.reduce((sum, t) => sum + Number(t.amount), 0);
 
-  // Por pessoa
-  const byPersonMap = new Map<
-    string,
-    { id: string; name: string; color: string; total: number }
-  >();
-  for (const t of currentMonthTx) {
-    const key = t.user_id;
-    const p = t.profiles;
-    const existing = byPersonMap.get(key);
-    if (existing) {
-      existing.total += Number(t.amount);
-    } else {
-      byPersonMap.set(key, {
-        id: key,
-        name: p?.display_name ?? "—",
-        color: p?.color ?? "#6366f1",
-        total: Number(t.amount),
-      });
-    }
-  }
-  const byPerson = Array.from(byPersonMap.values()).sort((a, b) => b.total - a.total);
+  // Por pessoa - já considerando a parte de cada um em contas divididas
+  const byPerson = typedProfiles.map((p) => ({
+    id: p.id,
+    name: p.display_name,
+    color: p.color,
+    total:
+      Math.round(
+        currentMonthTx.reduce((sum, t) => sum + shareFor(t, p.id), 0) * 100
+      ) / 100,
+  }));
 
   // Filtro por pessoa (opcional, via ?person=<id>)
   const activePerson = selectedPersonId
     ? byPerson.find((p) => p.id === selectedPersonId)
     : undefined;
-  const displayTx = activePerson
-    ? currentMonthTx.filter((t) => t.user_id === activePerson.id)
-    : currentMonthTx;
   const displayTotal = activePerson ? activePerson.total : totalMonth;
+
+  // Itens exibidos na lista "Lançamentos do mês". Sem filtro, mostra os
+  // lançamentos crus (quem pagou de fato). Filtrando por pessoa, mostra a
+  // parte de responsabilidade dela em cada lançamento (inclusive a metade
+  // de contas que a outra pessoa pagou, mas que ela também deve).
+  type DisplayItem = {
+    key: string;
+    icon: string;
+    categoryName: string;
+    note: string | null;
+    date: string;
+    amount: number;
+    personLabel: string | null;
+    partial: boolean;
+    txId: string;
+    deletable: boolean;
+  };
+
+  const displayItems: DisplayItem[] = activePerson
+    ? currentMonthTx
+        .filter((t) => shareFor(t, activePerson.id) > 0)
+        .map((t) => {
+          const debt = debtsByTxId.get(t.id);
+          const partial = Boolean(debt);
+          return {
+            key: t.id,
+            icon: t.categories?.icon ?? "📦",
+            categoryName: t.categories?.name ?? "Categoria",
+            note: t.note,
+            date: t.transaction_date,
+            amount: shareFor(t, activePerson.id),
+            personLabel:
+              partial && t.user_id !== activePerson.id
+                ? `metade · pago por ${t.profiles?.display_name ?? "seu par"}`
+                : partial
+                  ? "metade"
+                  : null,
+            partial,
+            txId: t.id,
+            deletable: t.user_id === activePerson.id,
+          };
+        })
+    : currentMonthTx.map((t) => ({
+        key: t.id,
+        icon: t.categories?.icon ?? "📦",
+        categoryName: t.categories?.name ?? "Categoria",
+        note: t.note,
+        date: t.transaction_date,
+        amount: Number(t.amount),
+        personLabel: t.profiles?.display_name ?? null,
+        partial: false,
+        txId: t.id,
+        deletable: true,
+      }));
 
   // Por categoria (respeita o filtro de pessoa, se houver)
   const byCategoryMap = new Map<
     string,
     { name: string; icon: string; color: string; total: number }
   >();
-  for (const t of displayTx) {
+  for (const t of currentMonthTx) {
+    const amount = activePerson ? shareFor(t, activePerson.id) : Number(t.amount);
+    if (amount <= 0) continue;
     const key = t.category_id;
     const cat = t.categories;
     const existing = byCategoryMap.get(key);
     if (existing) {
-      existing.total += Number(t.amount);
+      existing.total += amount;
     } else {
       byCategoryMap.set(key, {
         name: cat?.name ?? "Outros",
         icon: cat?.icon ?? "📦",
         color: cat?.color ?? "#64748b",
-        total: Number(t.amount),
+        total: amount,
       });
     }
   }
@@ -160,6 +230,11 @@ export default async function OverviewPage({
           <p className="mt-1 text-3xl font-semibold">
             R$ {displayTotal.toFixed(2)}
           </p>
+          {activePerson && (
+            <p className="mt-1 text-xs text-slate-400">
+              Já inclui a parte dele(a) em contas divididas
+            </p>
+          )}
         </div>
 
         {byPerson.length > 0 && (
@@ -250,36 +325,38 @@ export default async function OverviewPage({
           {activePerson ? `Lançamentos de ${activePerson.name}` : "Lançamentos do mês"}
         </h2>
         <div className="space-y-2 pb-4">
-          {displayTx.map((t) => (
+          {displayItems.map((item) => (
             <div
-              key={t.id}
+              key={item.key}
               className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
             >
-              <span className="shrink-0 text-lg">{t.categories?.icon ?? "📦"}</span>
+              <span className="shrink-0 text-lg">{item.icon}</span>
               <div className="min-w-0 flex-1">
                 <p className="break-words text-sm font-medium text-slate-800 dark:text-slate-200">
-                  {t.categories?.name ?? "Categoria"}
-                  {t.note ? ` · ${t.note}` : ""}
+                  {item.categoryName}
+                  {item.note ? ` · ${item.note}` : ""}
                 </p>
                 <p className="break-words text-xs text-slate-500 dark:text-slate-400">
-                  {new Date(t.transaction_date).toLocaleDateString("pt-BR")}
-                  {t.profiles?.display_name ? ` · ${t.profiles.display_name}` : ""}
+                  {new Date(item.date).toLocaleDateString("pt-BR")}
+                  {item.personLabel ? ` · ${item.personLabel}` : ""}
                 </p>
               </div>
               <span className="shrink-0 text-sm font-semibold text-slate-800 dark:text-slate-200">
-                R$ {Number(t.amount).toFixed(2)}
+                R$ {item.amount.toFixed(2)}
               </span>
-              <form action={deleteWithId.bind(null, t.id)}>
-                <button
-                  type="submit"
-                  className="ml-1 shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs text-red-600 transition active:scale-90 dark:bg-red-500/10 dark:text-red-400"
-                >
-                  ✕
-                </button>
-              </form>
+              {item.deletable && (
+                <form action={deleteWithId.bind(null, item.txId)}>
+                  <button
+                    type="submit"
+                    className="ml-1 shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs text-red-600 transition active:scale-90 dark:bg-red-500/10 dark:text-red-400"
+                  >
+                    ✕
+                  </button>
+                </form>
+              )}
             </div>
           ))}
-          {displayTx.length === 0 && (
+          {displayItems.length === 0 && (
             <p className="text-sm text-slate-400 dark:text-slate-500">
               Nenhum lançamento aqui ainda.
             </p>

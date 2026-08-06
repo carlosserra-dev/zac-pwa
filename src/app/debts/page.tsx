@@ -228,6 +228,7 @@ export default async function DebtsPage() {
                     <p className="break-words text-xs text-slate-500 dark:text-slate-400">
                       {d.debtor?.display_name} → {d.creditor?.display_name} ·
                       quitado
+                      {d.transactions?.note ? ` · ${d.transactions.note}` : ""}
                     </p>
                   </div>
                   {d.debtor_id === profile.id && (
