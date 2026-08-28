@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { BottomNav } from "@/components/BottomNav";
-import { MonthsBarChart, type MonthTotal } from "@/components/MonthsBarChart";
+import {
+  MonthsBarChart,
+  type MonthTotal,
+  type MonthSeriesRow,
+} from "@/components/MonthsBarChart";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { deleteTransaction } from "@/lib/actions";
 import type { Profile, TransactionWithRelations } from "@/types/database";
@@ -136,6 +140,10 @@ export default async function OverviewPage({
     (a, b) => b.total - a.total
   );
   const activeCategories = byCategory.filter((c) => selectedCategoryIds.has(c.id));
+  // Denominador estável pras barras de progresso de "Por categoria" - não
+  // usa o total filtrado, senão as barras estouram quando a categoria
+  // filtrada tem valor baixo comparado às outras.
+  const categoryScopeTotal = byCategory.reduce((sum, c) => sum + c.total, 0);
 
   // Combina os dois filtros: quanto desse lançamento entra na visão atual.
   function amountFor(t: TransactionWithRelations) {
@@ -185,21 +193,35 @@ export default async function OverviewPage({
     });
 
   // Comparativo dos últimos 6 meses - respeita os dois filtros também.
+  // Com 1+ categorias selecionadas, vira um gráfico com uma barra por
+  // categoria (série), pra comparar a evolução delas lado a lado.
   const months: MonthTotal[] = [];
+  const monthSeriesRows: MonthSeriesRow[] = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${d.getMonth()}`;
-    const total = all
-      .filter((t) => {
-        const td = new Date(t.transaction_date);
-        return `${td.getFullYear()}-${td.getMonth()}` === key;
-      })
-      .reduce((sum, t) => sum + amountFor(t), 0);
+    const txThisMonth = all.filter((t) => {
+      const td = new Date(t.transaction_date);
+      return `${td.getFullYear()}-${td.getMonth()}` === key;
+    });
+
+    const total = txThisMonth.reduce((sum, t) => sum + amountFor(t), 0);
     months.push({
       label: MONTH_LABELS[d.getMonth()],
       total: Math.round(total * 100) / 100,
       isCurrent: i === 0,
     });
+
+    if (activeCategories.length > 0) {
+      const row: MonthSeriesRow = { label: MONTH_LABELS[d.getMonth()], isCurrent: i === 0 };
+      for (const cat of activeCategories) {
+        const catTotal = txThisMonth
+          .filter((t) => t.category_id === cat.id)
+          .reduce((sum, t) => sum + (activePerson ? shareFor(t, activePerson.id) : Number(t.amount)), 0);
+        row[cat.id] = Math.round(catTotal * 100) / 100;
+      }
+      monthSeriesRows.push(row);
+    }
   }
 
   function buildHref(personId: string | null, categoryIds: Set<string>) {
@@ -224,6 +246,8 @@ export default async function OverviewPage({
     }
     return buildHref(selectedPersonId ?? null, next);
   }
+
+  const clearCategoriesHref = buildHref(selectedPersonId ?? null, new Set());
 
   const hasActiveFilter = Boolean(activePerson) || activeCategories.length > 0;
 
@@ -335,8 +359,25 @@ export default async function OverviewPage({
           </p>
         )}
         <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-          <MonthsBarChart data={months} />
+          {activeCategories.length > 0 ? (
+            <MonthsBarChart
+              data={monthSeriesRows}
+              series={activeCategories.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
+            />
+          ) : (
+            <MonthsBarChart data={months} />
+          )}
         </div>
+
+        {activeCategories.length > 0 && (
+          <Link
+            href={clearCategoriesHref}
+            scroll={false}
+            className="mt-2 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2 text-xs font-medium text-slate-600 transition active:scale-[0.98] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+          >
+            ↺ Limpar filtro de categorias
+          </Link>
+        )}
 
         <h2 className="mt-8 mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
           Por categoria
@@ -349,7 +390,7 @@ export default async function OverviewPage({
           )}
           {byCategory.map((c) => {
             const isActive = selectedCategoryIds.has(c.id);
-            const pct = displayTotal > 0 ? (c.total / displayTotal) * 100 : 0;
+            const pct = categoryScopeTotal > 0 ? (c.total / categoryScopeTotal) * 100 : 0;
             return (
               <Link
                 key={c.id}
