@@ -34,7 +34,10 @@ export default async function OverviewPage({
 }: {
   searchParams: Promise<{ person?: string; category?: string }>;
 }) {
-  const { person: selectedPersonId, category: selectedCategoryId } = await searchParams;
+  const { person: selectedPersonId, category: selectedCategoryParam } = await searchParams;
+  const selectedCategoryIds = new Set(
+    (selectedCategoryParam ?? "").split(",").filter(Boolean)
+  );
 
   const supabase = await createClient();
 
@@ -132,13 +135,11 @@ export default async function OverviewPage({
   const byCategory = Array.from(byCategoryMap.values()).sort(
     (a, b) => b.total - a.total
   );
-  const activeCategory = selectedCategoryId
-    ? byCategory.find((c) => c.id === selectedCategoryId)
-    : undefined;
+  const activeCategories = byCategory.filter((c) => selectedCategoryIds.has(c.id));
 
   // Combina os dois filtros: quanto desse lançamento entra na visão atual.
   function amountFor(t: TransactionWithRelations) {
-    if (activeCategory && t.category_id !== activeCategory.id) return 0;
+    if (selectedCategoryIds.size > 0 && !selectedCategoryIds.has(t.category_id)) return 0;
     return activePerson ? shareFor(t, activePerson.id) : Number(t.amount);
   }
 
@@ -201,35 +202,54 @@ export default async function OverviewPage({
     });
   }
 
-  function filterHref(overrides: { person?: string | null; category?: string | null }) {
-    const person = overrides.person !== undefined ? overrides.person : selectedPersonId;
-    const category =
-      overrides.category !== undefined ? overrides.category : selectedCategoryId;
+  function buildHref(personId: string | null, categoryIds: Set<string>) {
     const params = new URLSearchParams();
-    if (person) params.set("person", person);
-    if (category) params.set("category", category);
+    if (personId) params.set("person", personId);
+    if (categoryIds.size > 0) params.set("category", Array.from(categoryIds).join(","));
     const qs = params.toString();
     return qs ? `/overview?${qs}` : "/overview";
   }
 
-  const hasActiveFilter = Boolean(activePerson || activeCategory);
+  function personHref(personId: string) {
+    const next = activePerson?.id === personId ? null : personId;
+    return buildHref(next, selectedCategoryIds);
+  }
+
+  function categoryHref(categoryId: string) {
+    const next = new Set(selectedCategoryIds);
+    if (next.has(categoryId)) {
+      next.delete(categoryId);
+    } else {
+      next.add(categoryId);
+    }
+    return buildHref(selectedPersonId ?? null, next);
+  }
+
+  const hasActiveFilter = Boolean(activePerson) || activeCategories.length > 0;
+
+  const categoryLabel =
+    activeCategories.length === 0
+      ? null
+      : activeCategories.length <= 2
+        ? activeCategories.map((c) => c.name).join(" + ")
+        : `${activeCategories.length} categorias`;
 
   const totalLabel =
-    activePerson && activeCategory
-      ? `Total de ${activePerson.name} em ${activeCategory.name} este mês`
+    activePerson && categoryLabel
+      ? `Total de ${activePerson.name} em ${categoryLabel} este mês`
       : activePerson
         ? `Total de ${activePerson.name} este mês`
-        : activeCategory
-          ? `Total em ${activeCategory.name} este mês`
+        : categoryLabel
+          ? `Total em ${categoryLabel} este mês`
           : "Total gasto este mês";
 
   const listLabel =
-    activePerson && activeCategory
-      ? `Lançamentos de ${activePerson.name} em ${activeCategory.name}`
+    activePerson && categoryLabel
+      ? `Lançamentos de ${activePerson.name} em ${categoryLabel}`
       : activePerson
         ? `Lançamentos de ${activePerson.name}`
-        : activeCategory
-          ? `Lançamentos em ${activeCategory.name}`
+        : categoryLabel
+          ? `Lançamentos em ${categoryLabel}`
           : "Lançamentos do mês";
 
   const deleteWithId = async (id: string) => {
@@ -270,7 +290,8 @@ export default async function OverviewPage({
                 return (
                   <Link
                     key={p.id}
-                    href={filterHref({ person: isActive ? null : p.id })}
+                    href={personHref(p.id)}
+                    scroll={false}
                     className={`flex-1 rounded-xl border px-3 py-3 text-left transition active:scale-[0.98] ${
                       isActive
                         ? "border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-500/10"
@@ -296,6 +317,7 @@ export default async function OverviewPage({
             {hasActiveFilter && (
               <Link
                 href="/overview"
+                scroll={false}
                 className="mt-2 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-600 transition active:scale-[0.98] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
               >
                 ↺ Ver todos
@@ -326,12 +348,13 @@ export default async function OverviewPage({
             </p>
           )}
           {byCategory.map((c) => {
-            const isActive = activeCategory?.id === c.id;
+            const isActive = selectedCategoryIds.has(c.id);
             const pct = displayTotal > 0 ? (c.total / displayTotal) * 100 : 0;
             return (
               <Link
                 key={c.id}
-                href={filterHref({ category: isActive ? null : c.id })}
+                href={categoryHref(c.id)}
+                scroll={false}
                 className={`block rounded-xl border px-4 py-3 transition active:scale-[0.99] ${
                   isActive
                     ? "border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-500/10"
@@ -340,12 +363,13 @@ export default async function OverviewPage({
               >
                 <div className="flex items-center justify-between gap-2 text-sm">
                   <span
-                    className={`min-w-0 break-words font-medium ${
+                    className={`flex min-w-0 items-center gap-1.5 break-words font-medium ${
                       isActive
                         ? "text-indigo-700 dark:text-indigo-300"
                         : "text-slate-700 dark:text-slate-300"
                     }`}
                   >
+                    {isActive && <span className="shrink-0">✓</span>}
                     {c.icon} {c.name}
                   </span>
                   <span className="shrink-0 text-slate-500 dark:text-slate-400">
