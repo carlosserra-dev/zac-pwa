@@ -35,9 +35,22 @@ function formatChangeDate(dateStr: string) {
 export default async function RecurringPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; error?: string; category?: string }>;
+  searchParams: Promise<{
+    saved?: string;
+    error?: string;
+    category?: string;
+    person?: string;
+    joint?: string;
+  }>;
 }) {
-  const { saved, error, category: preselectedCategoryId } = await searchParams;
+  const {
+    saved,
+    error,
+    category: preselectedCategoryId,
+    person: selectedPersonId,
+    joint: jointParam,
+  } = await searchParams;
+  const jointOnly = jointParam === "1";
 
   const supabase = await createClient();
 
@@ -99,6 +112,24 @@ export default async function RecurringPage({
     changesByRecId.set(c.recurring_expense_id, list);
   }
 
+  const visibleRecurring = typedRecurring.filter((r) => {
+    if (selectedPersonId && r.user_id !== selectedPersonId) return false;
+    if (jointOnly && !r.split_equally) return false;
+    return true;
+  });
+
+  function filterHref(overrides: { person?: string | null; joint?: boolean | null }) {
+    const person = overrides.person !== undefined ? overrides.person : selectedPersonId;
+    const joint = overrides.joint !== undefined ? overrides.joint : jointOnly;
+    const params = new URLSearchParams();
+    if (person) params.set("person", person);
+    if (joint) params.set("joint", "1");
+    const qs = params.toString();
+    return qs ? `/recurring?${qs}` : "/recurring";
+  }
+
+  const hasRecurringFilter = Boolean(selectedPersonId) || jointOnly;
+
   return (
     <>
       <main className="mx-auto w-full max-w-md flex-1 px-5 pb-6 pt-8">
@@ -127,8 +158,50 @@ export default async function RecurringPage({
           </p>
         )}
 
-        <div className="mt-6 space-y-2">
-          {typedRecurring.map((r) => {
+        {(typedProfiles.length > 0 || typedRecurring.some((r) => r.split_equally)) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {typedProfiles.map((p) => {
+              const isActive = selectedPersonId === p.id;
+              return (
+                <Link
+                  key={p.id}
+                  href={filterHref({ person: isActive ? null : p.id })}
+                  scroll={false}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition active:scale-95 ${
+                    isActive
+                      ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-500/10 dark:text-indigo-300"
+                      : "border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+                  }`}
+                >
+                  {p.display_name}
+                </Link>
+              );
+            })}
+            <Link
+              href={filterHref({ joint: jointOnly ? null : true })}
+              scroll={false}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition active:scale-95 ${
+                jointOnly
+                  ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-500/10 dark:text-indigo-300"
+                  : "border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+              }`}
+            >
+              🤝 Compartilhados
+            </Link>
+            {hasRecurringFilter && (
+              <Link
+                href="/recurring"
+                scroll={false}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 transition active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"
+              >
+                ↺ Limpar
+              </Link>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4 space-y-2">
+          {visibleRecurring.map((r) => {
             const otherProfile = typedProfiles.find((p) => p.id !== r.user_id);
             return (
               <details
@@ -369,9 +442,11 @@ export default async function RecurringPage({
               </details>
             );
           })}
-          {typedRecurring.length === 0 && (
+          {visibleRecurring.length === 0 && (
             <p className="text-sm text-slate-400 dark:text-slate-500">
-              Nenhum gasto recorrente cadastrado ainda.
+              {typedRecurring.length === 0
+                ? "Nenhum gasto recorrente cadastrado ainda."
+                : "Nenhum gasto recorrente com esse filtro."}
             </p>
           )}
         </div>
