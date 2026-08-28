@@ -35,9 +35,9 @@ function formatChangeDate(dateStr: string) {
 export default async function RecurringPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; category?: string }>;
 }) {
-  const { saved, error } = await searchParams;
+  const { saved, error, category: preselectedCategoryId } = await searchParams;
 
   const supabase = await createClient();
 
@@ -376,14 +376,23 @@ export default async function RecurringPage({
           )}
         </div>
 
-        <div className="mt-8 rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-700">
+        <div
+          id="new-recurring"
+          className="mt-8 scroll-mt-6 rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-700"
+        >
           <p className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-300">
             Novo gasto recorrente
           </p>
+          {preselectedCategoryId && (
+            <p className="mb-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+              Categoria pré-selecionada a partir do lançamento
+            </p>
+          )}
           <form action={addRecurringExpense} className="space-y-3">
             <select
               name="category_id"
               required
+              defaultValue={preselectedCategoryId ?? ""}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             >
               <option value="">Categoria</option>

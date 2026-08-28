@@ -48,7 +48,7 @@ export default async function CategoriesPage({
     <>
       <main className="mx-auto w-full max-w-md flex-1 px-5 pb-6 pt-8">
         <Link
-          href="/"
+          href="/menu"
           className="mb-4 inline-block text-sm text-slate-500 dark:text-slate-400"
         >
           ← Voltar

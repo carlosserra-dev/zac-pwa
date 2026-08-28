@@ -43,7 +43,7 @@ export default async function AddExpensePage({
         ← Voltar
       </Link>
 
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-3 flex items-center gap-3">
         <span
           className="flex h-12 w-12 items-center justify-center rounded-2xl text-2xl"
           style={{ backgroundColor: `${typedCategory.color}22` }}
@@ -59,6 +59,13 @@ export default async function AddExpensePage({
           </h1>
         </div>
       </div>
+
+      <Link
+        href={`/recurring?category=${typedCategory.id}#new-recurring`}
+        className="mb-6 inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition active:scale-95 dark:border-slate-700 dark:text-slate-300"
+      >
+        🔁 Cadastrar como recorrente
+      </Link>
 
       <form action={addTransaction} className="flex flex-1 flex-col gap-5">
         <input type="hidden" name="category_id" value={typedCategory.id} />
